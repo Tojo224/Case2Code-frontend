@@ -14,3 +14,4 @@ Frontend del software CASE para diagramado de clases UML con `@xyflow/react`, Zu
 ## Arquitectura
 
 El estado del diagrama en Zustand no duplica un modelo propio independiente: despacha `Typed UML Commands` hacia el backend FastAPI para mutar el `CanonicalUmlDocument v1`.
+
