@@ -50,11 +50,58 @@ export const UmlClassNode = memo(({ data, selected }: NodeProps & { data: UmlCla
         selected ? 'border-sky-500 shadow-sky-100 shadow-lg' : 'border-slate-300 hover:border-slate-400'
       }`}
     >
-      {/* Handles for incoming and outgoing connections */}
-      <Handle type="target" position={Position.Top} className="!w-3 !h-3 !bg-sky-500" />
-      <Handle type="source" position={Position.Bottom} className="!w-3 !h-3 !bg-sky-500" />
-      <Handle type="target" position={Position.Left} className="!w-3 !h-3 !bg-sky-500" />
-      <Handle type="source" position={Position.Right} className="!w-3 !h-3 !bg-sky-500" />
+      {/* 4-way bidirectional connection handles (Top, Right, Bottom, Left) */}
+      <Handle
+        type="target"
+        position={Position.Top}
+        id="top-target"
+        className="!w-3 !h-3 !bg-sky-500 !border-2 !border-white hover:!scale-150 transition-transform cursor-crosshair"
+      />
+      <Handle
+        type="source"
+        position={Position.Top}
+        id="top-source"
+        className="!w-3 !h-3 !bg-sky-500 !border-2 !border-white hover:!scale-150 transition-transform cursor-crosshair"
+      />
+
+      <Handle
+        type="target"
+        position={Position.Right}
+        id="right-target"
+        className="!w-3 !h-3 !bg-sky-500 !border-2 !border-white hover:!scale-150 transition-transform cursor-crosshair"
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="right-source"
+        className="!w-3 !h-3 !bg-sky-500 !border-2 !border-white hover:!scale-150 transition-transform cursor-crosshair"
+      />
+
+      <Handle
+        type="target"
+        position={Position.Bottom}
+        id="bottom-target"
+        className="!w-3 !h-3 !bg-sky-500 !border-2 !border-white hover:!scale-150 transition-transform cursor-crosshair"
+      />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="bottom-source"
+        className="!w-3 !h-3 !bg-sky-500 !border-2 !border-white hover:!scale-150 transition-transform cursor-crosshair"
+      />
+
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="left-target"
+        className="!w-3 !h-3 !bg-sky-500 !border-2 !border-white hover:!scale-150 transition-transform cursor-crosshair"
+      />
+      <Handle
+        type="source"
+        position={Position.Left}
+        id="left-source"
+        className="!w-3 !h-3 !bg-sky-500 !border-2 !border-white hover:!scale-150 transition-transform cursor-crosshair"
+      />
 
       {/* Class Header */}
       <div className="bg-slate-100 px-3 py-2 border-b border-slate-200 rounded-t-md flex items-center justify-between">

@@ -7,7 +7,9 @@ export type RelationshipType =
   | 'MANY_TO_MANY'
   | 'INHERITANCE'
   | 'AGGREGATION'
-  | 'COMPOSITION';
+  | 'COMPOSITION'
+  | 'REALIZATION'
+  | 'DEPENDENCY';
 
 export interface Position {
   x: number;
@@ -45,6 +47,8 @@ export interface UmlRelationship {
   target_cardinality: string;
   source_role?: string | null;
   target_role?: string | null;
+  source_handle?: string | null;
+  target_handle?: string | null;
   [key: string]: unknown;
 }
 
@@ -142,6 +146,8 @@ export interface CreateRelationshipCommand extends BaseCommand {
   target_cardinality?: string;
   source_role?: string | null;
   target_role?: string | null;
+  source_handle?: string | null;
+  target_handle?: string | null;
 }
 
 export interface DeleteRelationshipCommand extends BaseCommand {

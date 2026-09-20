@@ -59,6 +59,8 @@ function documentToElements(doc: CanonicalUmlDocument): { nodes: Node[]; edges: 
     id: rel.id,
     source: rel.source_class_id,
     target: rel.target_class_id,
+    sourceHandle: rel.source_handle || undefined,
+    targetHandle: rel.target_handle || undefined,
     type: 'umlRelationship',
     data: rel,
   }));

@@ -1,9 +1,9 @@
-import { memo } from 'react';
+import React, { memo } from 'react';
 import {
   BaseEdge,
   EdgeLabelRenderer,
   EdgeProps,
-  getBezierPath,
+  getSmoothStepPath,
 } from '@xyflow/react';
 import { Trash2 } from 'lucide-react';
 import { UmlRelationship } from '../../types/uml';
@@ -18,18 +18,18 @@ export const UmlRelationshipEdge = memo(({
   sourcePosition,
   targetPosition,
   style = {},
-  markerEnd,
   data,
 }: EdgeProps & { data?: UmlRelationship }) => {
   const { dispatchCommand } = useDiagramStore();
 
-  const [edgePath, labelX, labelY] = getBezierPath({
+  const [edgePath, labelX, labelY] = getSmoothStepPath({
     sourceX,
     sourceY,
     sourcePosition,
     targetX,
     targetY,
     targetPosition,
+    borderRadius: 8,
   });
 
   const handleDelete = (e: React.MouseEvent) => {
@@ -42,18 +42,49 @@ export const UmlRelationshipEdge = memo(({
     }
   };
 
-  const getRelationshipBadge = (type?: string) => {
-    switch (type) {
+  const relType = data?.type || 'ONE_TO_MANY';
+
+  // Determine line dash and color
+  const isDashed = relType === 'REALIZATION' || relType === 'DEPENDENCY';
+  const edgeStroke = '#475569';
+
+  // SVG Marker IDs
+  const markerStartId = relType === 'COMPOSITION'
+    ? 'url(#marker-composition-diamond)'
+    : relType === 'AGGREGATION'
+    ? 'url(#marker-aggregation-diamond)'
+    : undefined;
+
+  const markerEndId = (relType === 'INHERITANCE' || relType === 'REALIZATION')
+    ? 'url(#marker-inheritance-triangle)'
+    : (relType === 'DEPENDENCY' || relType === 'ONE_TO_MANY' || relType === 'MANY_TO_ONE' || relType === 'MANY_TO_MANY')
+    ? 'url(#marker-nav-arrow)'
+    : undefined;
+
+  const getRelationshipBadge = () => {
+    switch (relType) {
       case 'ONE_TO_MANY':
-        return '1 : N';
+        return data?.source_cardinality && data?.target_cardinality
+          ? `${data.source_cardinality} : ${data.target_cardinality}`
+          : '1 : N';
       case 'MANY_TO_ONE':
-        return 'N : 1';
+        return data?.source_cardinality && data?.target_cardinality
+          ? `${data.source_cardinality} : ${data.target_cardinality}`
+          : 'N : 1';
       case 'ONE_TO_ONE':
         return '1 : 1';
       case 'MANY_TO_MANY':
         return 'N : M';
+      case 'COMPOSITION':
+        return '◆ Composición';
+      case 'AGGREGATION':
+        return '◇ Agregación';
       case 'INHERITANCE':
-        return 'extends';
+        return '▷ extends';
+      case 'REALIZATION':
+        return '··▷ implements';
+      case 'DEPENDENCY':
+        return '··> uses';
       default:
         return 'relates';
     }
@@ -61,7 +92,73 @@ export const UmlRelationshipEdge = memo(({
 
   return (
     <>
-      <BaseEdge path={edgePath} markerEnd={markerEnd} style={{ ...style, strokeWidth: 2, stroke: '#64748b' }} />
+      {/* SVG Marker Definitions */}
+      <defs>
+        {/* Composition: Filled black diamond at source */}
+        <marker
+          id="marker-composition-diamond"
+          viewBox="0 0 20 20"
+          refX="10"
+          refY="10"
+          markerWidth="16"
+          markerHeight="16"
+          orient="auto-start-reverse"
+        >
+          <polygon points="10,2 18,10 10,18 2,10" fill="#0f172a" stroke="#0f172a" strokeWidth="1.5" />
+        </marker>
+
+        {/* Aggregation: Hollow white diamond at source */}
+        <marker
+          id="marker-aggregation-diamond"
+          viewBox="0 0 20 20"
+          refX="10"
+          refY="10"
+          markerWidth="16"
+          markerHeight="16"
+          orient="auto-start-reverse"
+        >
+          <polygon points="10,2 18,10 10,18 2,10" fill="#ffffff" stroke="#334155" strokeWidth="2" />
+        </marker>
+
+        {/* Inheritance / Realization: Hollow white triangle at target */}
+        <marker
+          id="marker-inheritance-triangle"
+          viewBox="0 0 20 20"
+          refX="18"
+          refY="10"
+          markerWidth="14"
+          markerHeight="14"
+          orient="auto-start-reverse"
+        >
+          <polygon points="3,3 18,10 3,17" fill="#ffffff" stroke="#334155" strokeWidth="2" />
+        </marker>
+
+        {/* Navigable / Dependency Arrow */}
+        <marker
+          id="marker-nav-arrow"
+          viewBox="0 0 20 20"
+          refX="16"
+          refY="10"
+          markerWidth="12"
+          markerHeight="12"
+          orient="auto-start-reverse"
+        >
+          <path d="M 4,4 L 16,10 L 4,16" fill="none" stroke="#64748b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        </marker>
+      </defs>
+
+      <BaseEdge
+        path={edgePath}
+        markerStart={markerStartId}
+        markerEnd={markerEndId}
+        style={{
+          ...style,
+          strokeWidth: 2,
+          stroke: edgeStroke,
+          strokeDasharray: isDashed ? '6,6' : undefined,
+        }}
+      />
+
       <EdgeLabelRenderer>
         <div
           style={{
@@ -69,13 +166,18 @@ export const UmlRelationshipEdge = memo(({
             transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
             pointerEvents: 'all',
           }}
-          className="nodrag nopan group flex items-center space-x-1 bg-white px-2 py-0.5 rounded-full border border-slate-300 shadow-sm text-[11px] font-mono font-medium text-slate-700"
+          className="nodrag nopan group flex items-center space-x-1.5 bg-white/95 px-2.5 py-1 rounded-full border border-slate-300 shadow-md text-[11px] font-mono font-semibold text-slate-700 hover:border-sky-400 hover:text-sky-700 transition"
         >
-          <span>{getRelationshipBadge(data?.type)}</span>
+          <span>{getRelationshipBadge()}</span>
+          {data?.target_role && (
+            <span className="text-[10px] text-slate-400 font-normal italic">
+              ({data.target_role})
+            </span>
+          )}
           <button
             onClick={handleDelete}
             title="Delete relationship"
-            className="opacity-0 group-hover:opacity-100 hover:text-red-500 transition text-slate-400 ml-1"
+            className="opacity-0 group-hover:opacity-100 hover:text-red-500 transition text-slate-400 ml-0.5"
           >
             <Trash2 className="w-3 h-3" />
           </button>
@@ -84,4 +186,3 @@ export const UmlRelationshipEdge = memo(({
     </>
   );
 });
-
