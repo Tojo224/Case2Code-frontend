@@ -4,12 +4,26 @@ import {
   CommandExecutionResponse,
   UmlCommand,
 } from '../types/uml';
+import { ProjectCollaborator } from '../types/collaboration';
 
 const BASE_URL = '/api';
 
+function getAuthHeaders(): HeadersInit {
+  const token = localStorage.getItem('case2code_token');
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
 export const api = {
   async listDiagrams(): Promise<CanonicalUmlDocument[]> {
-    const res = await fetch(`${BASE_URL}/diagrams`);
+    const res = await fetch(`${BASE_URL}/diagrams`, {
+      headers: getAuthHeaders(),
+    });
     if (!res.ok) throw new Error('Failed to fetch diagrams');
     return res.json();
   },
@@ -17,7 +31,7 @@ export const api = {
   async createDiagram(name: string, description?: string): Promise<CanonicalUmlDocument> {
     const res = await fetch(`${BASE_URL}/diagrams`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ name, description }),
     });
     if (!res.ok) throw new Error('Failed to create diagram');
@@ -25,7 +39,9 @@ export const api = {
   },
 
   async getDiagram(diagramId: string): Promise<CanonicalUmlDocument> {
-    const res = await fetch(`${BASE_URL}/diagrams/${diagramId}`);
+    const res = await fetch(`${BASE_URL}/diagrams/${diagramId}`, {
+      headers: getAuthHeaders(),
+    });
     if (!res.ok) throw new Error(`Failed to load diagram: ${diagramId}`);
     return res.json();
   },
@@ -33,7 +49,7 @@ export const api = {
   async executeCommand(diagramId: string, command: UmlCommand): Promise<CommandExecutionResponse> {
     const res = await fetch(`${BASE_URL}/diagrams/${diagramId}/commands`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ command }),
     });
     if (!res.ok) {
@@ -45,7 +61,11 @@ export const api = {
 
   async downloadBackendZip(diagramId: string, verify: boolean = false): Promise<void> {
     const url = `${BASE_URL}/diagrams/${diagramId}/generate?verify=${verify}`;
-    const res = await fetch(url, { method: 'POST' });
+    const token = localStorage.getItem('case2code_token');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(url, { method: 'POST', headers });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: 'Generation failed' }));
       throw new Error(err.detail || 'Backend generation failed');
@@ -64,7 +84,7 @@ export const api = {
   async sendAssistantPrompt(diagramId: string, prompt: string): Promise<AssistantPromptResponse> {
     const res = await fetch(`${BASE_URL}/diagrams/${diagramId}/assistant`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ prompt }),
     });
     if (!res.ok) {
@@ -73,5 +93,38 @@ export const api = {
     }
     return res.json();
   },
-};
 
+  // Collaborator API methods
+  async getCollaborators(diagramId: string): Promise<ProjectCollaborator[]> {
+    const res = await fetch(`${BASE_URL}/diagrams/${diagramId}/collaborators`, {
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error('Failed to fetch collaborators');
+    return res.json();
+  },
+
+  async addCollaborator(
+    diagramId: string,
+    email: string,
+    role: string = 'EDITOR',
+  ): Promise<ProjectCollaborator> {
+    const res = await fetch(`${BASE_URL}/diagrams/${diagramId}/collaborators`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ email, role }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Failed to add collaborator' }));
+      throw new Error(err.detail || 'Failed to add collaborator');
+    }
+    return res.json();
+  },
+
+  async removeCollaborator(diagramId: string, userId: string): Promise<void> {
+    const res = await fetch(`${BASE_URL}/diagrams/${diagramId}/collaborators/${userId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error('Failed to remove collaborator');
+  },
+};

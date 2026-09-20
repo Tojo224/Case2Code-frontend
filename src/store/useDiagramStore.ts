@@ -10,6 +10,8 @@ import {
 } from '@xyflow/react';
 import { CanonicalUmlDocument, UmlClass, UmlCommand } from '../types/uml';
 import { api } from '../services/api';
+import { collaborationWs } from '../services/websocket';
+import { useCollaborationStore } from './useCollaborationStore';
 
 interface DiagramState {
   currentDocument: CanonicalUmlDocument | null;
@@ -45,6 +47,9 @@ interface DiagramState {
   isAssistantOpen: boolean;
   toggleAssistant: () => void;
   sendAssistantPrompt: (prompt: string) => Promise<any>;
+
+  // Real-Time Collaboration
+  applyRemoteDocument: (doc: CanonicalUmlDocument) => void;
 }
 
 function documentToElements(doc: CanonicalUmlDocument): { nodes: Node[]; edges: Edge[] } {
@@ -104,6 +109,13 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
         edges,
         isLoading: false,
       }));
+
+      // Connect real-time collaboration
+      const token = localStorage.getItem('case2code_token');
+      collaborationWs.connect(newDoc.id, token);
+      api.getCollaborators(newDoc.id)
+        .then((collabs) => useCollaborationStore.getState().setCollaborators(collabs))
+        .catch(() => {});
     } catch (e: any) {
       set({ error: e.message, isLoading: false });
     }
@@ -115,6 +127,13 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       const doc = await api.getDiagram(diagramId);
       const { nodes, edges } = documentToElements(doc);
       set({ currentDocument: doc, nodes, edges, isLoading: false });
+
+      // Connect real-time collaboration
+      const token = localStorage.getItem('case2code_token');
+      collaborationWs.connect(doc.id, token);
+      api.getCollaborators(doc.id)
+        .then((collabs) => useCollaborationStore.getState().setCollaborators(collabs))
+        .catch(() => {});
     } catch (e: any) {
       set({ error: e.message, isLoading: false });
     }
@@ -216,6 +235,26 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       set({ error: e.message });
       throw e;
     }
+  },
+
+  applyRemoteDocument: (doc: CanonicalUmlDocument) => {
+    const currentDoc = get().currentDocument;
+    if (!currentDoc || currentDoc.id !== doc.id) return;
+    if (doc.version < currentDoc.version) return;
+
+    const { nodes, edges } = documentToElements(doc);
+    const currentSelected = get().selectedClass;
+    let updatedSelected: UmlClass | null = null;
+    if (currentSelected) {
+      updatedSelected = doc.classes.find((c) => c.id === currentSelected.id) || null;
+    }
+
+    set({
+      currentDocument: doc,
+      nodes,
+      edges,
+      selectedClass: updatedSelected,
+    });
   },
 }));
 

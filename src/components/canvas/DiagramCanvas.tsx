@@ -12,6 +12,7 @@ import { useDiagramStore } from '../../store/useDiagramStore';
 import { UmlClassNode } from './UmlClassNode';
 import { UmlRelationshipEdge } from './UmlRelationshipEdge';
 import { RelationshipModal } from '../modals/RelationshipModal';
+import { LiveCursors } from '../collaboration/LiveCursors';
 
 export const DiagramCanvas: React.FC = () => {
   const {
@@ -48,6 +49,7 @@ export const DiagramCanvas: React.FC = () => {
           maskColor="rgba(241, 245, 249, 0.7)"
           className="!bg-white !border !border-slate-200 !rounded-lg !shadow-md"
         />
+        <LiveCursors />
       </ReactFlow>
 
       {/* Relationship Creation Modal */}

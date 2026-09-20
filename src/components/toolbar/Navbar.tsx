@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useDiagramStore } from '../../store/useDiagramStore';
 import { Code2, Download, Plus, AlertCircle, RefreshCw, FolderPlus, Bot } from 'lucide-react';
+import { CollaboratorAvatars } from '../collaboration/CollaboratorAvatars';
+import { UserMenu } from '../auth/UserMenu';
 
 export const Navbar: React.FC = () => {
   const {
@@ -114,6 +116,16 @@ export const Navbar: React.FC = () => {
             )}
             <span>{isGenerating ? 'Generating...' : 'Generate Spring Boot'}</span>
           </button>
+
+          <div className="h-6 w-px bg-slate-200 mx-1" />
+
+          {/* Real-Time Collaborators Presence */}
+          <CollaboratorAvatars />
+
+          <div className="h-6 w-px bg-slate-200 mx-1" />
+
+          {/* User Profile & Demo Switcher */}
+          <UserMenu />
         </div>
       </div>
 
