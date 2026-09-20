@@ -144,3 +144,4 @@ export const UmlClassNode = memo(({ data, selected }: NodeProps & { data: UmlCla
     </div>
   );
 });
+

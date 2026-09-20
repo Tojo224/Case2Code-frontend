@@ -40,6 +40,11 @@ interface DiagramState {
   setPendingConnection: (conn: Connection | null) => void;
   clearError: () => void;
   generateBackend: (verify?: boolean) => Promise<void>;
+
+  // AI Assistant
+  isAssistantOpen: boolean;
+  toggleAssistant: () => void;
+  sendAssistantPrompt: (prompt: string) => Promise<any>;
 }
 
 function documentToElements(doc: CanonicalUmlDocument): { nodes: Node[]; edges: Edge[] } {
@@ -185,4 +190,30 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       set({ error: e.message, isGenerating: false });
     }
   },
+
+  isAssistantOpen: false,
+  toggleAssistant: () => set((state) => ({ isAssistantOpen: !state.isAssistantOpen })),
+
+  sendAssistantPrompt: async (prompt: string) => {
+    const doc = get().currentDocument;
+    if (!doc) throw new Error('No diagram loaded');
+
+    try {
+      set({ error: null });
+      const res = await api.sendAssistantPrompt(doc.id, prompt);
+      if (res.executed_commands && res.executed_commands.length > 0) {
+        const { nodes, edges } = documentToElements(res.document);
+        set({
+          currentDocument: res.document,
+          nodes,
+          edges,
+        });
+      }
+      return res;
+    } catch (e: any) {
+      set({ error: e.message });
+      throw e;
+    }
+  },
 }));
+

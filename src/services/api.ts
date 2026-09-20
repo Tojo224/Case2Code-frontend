@@ -1,4 +1,9 @@
-import { CanonicalUmlDocument, CommandExecutionResponse, UmlCommand } from '../types/uml';
+import {
+  AssistantPromptResponse,
+  CanonicalUmlDocument,
+  CommandExecutionResponse,
+  UmlCommand,
+} from '../types/uml';
 
 const BASE_URL = '/api';
 
@@ -55,4 +60,18 @@ export const api = {
     a.remove();
     window.URL.revokeObjectURL(downloadUrl);
   },
+
+  async sendAssistantPrompt(diagramId: string, prompt: string): Promise<AssistantPromptResponse> {
+    const res = await fetch(`${BASE_URL}/diagrams/${diagramId}/assistant`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Assistant request failed' }));
+      throw new Error(err.detail || 'Assistant request failed');
+    }
+    return res.json();
+  },
 };
+

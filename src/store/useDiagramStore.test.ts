@@ -10,6 +10,7 @@ vi.mock('../services/api', () => ({
     getDiagram: vi.fn(),
     executeCommand: vi.fn(),
     downloadBackendZip: vi.fn(),
+    sendAssistantPrompt: vi.fn(),
   },
 }));
 
@@ -111,4 +112,48 @@ describe('useDiagramStore', () => {
     expect(state.nodes.length).toBe(2);
     expect(state.nodes.find((n) => n.id === 'c-2')).toBeDefined();
   });
+
+  it('toggles assistant drawer and sends assistant prompt updating document', async () => {
+    expect(useDiagramStore.getState().isAssistantOpen).toBe(false);
+    useDiagramStore.getState().toggleAssistant();
+    expect(useDiagramStore.getState().isAssistantOpen).toBe(true);
+
+    const updatedDoc: CanonicalUmlDocument = {
+      ...sampleDoc,
+      version: 3,
+      classes: [
+        ...sampleDoc.classes,
+        {
+          id: 'c-3',
+          name: 'Vehiculo',
+          position: { x: 400, y: 150 },
+          attributes: [],
+          is_abstract: false,
+        },
+      ],
+    };
+
+    useDiagramStore.setState({ currentDocument: sampleDoc });
+    vi.mocked(api.sendAssistantPrompt).mockResolvedValue({
+      success: true,
+      reply: 'Se creó la clase Vehiculo',
+      executed_commands: [
+        {
+          command_type: 'CREATE_CLASS',
+          name: 'Vehiculo',
+        },
+      ],
+      document: updatedDoc,
+    });
+
+    const res = await useDiagramStore.getState().sendAssistantPrompt('Crea la clase Vehiculo');
+    expect(res.success).toBe(true);
+    expect(res.reply).toContain('Vehiculo');
+
+    const state = useDiagramStore.getState();
+    expect(state.currentDocument?.version).toBe(3);
+    expect(state.nodes.length).toBe(2);
+    expect(state.nodes.find((n) => n.id === 'c-3')).toBeDefined();
+  });
 });
+

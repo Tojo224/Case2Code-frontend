@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useDiagramStore } from './store/useDiagramStore';
 import { Navbar } from './components/toolbar/Navbar';
 import { DiagramCanvas } from './components/canvas/DiagramCanvas';
+import { CaseAssistantChat } from './components/assistant/CaseAssistantChat';
 
 export const App: React.FC = () => {
   const { fetchDiagrams, currentDocument, createDiagram, isLoading } = useDiagramStore();
@@ -24,7 +25,10 @@ export const App: React.FC = () => {
             Loading diagram...
           </div>
         ) : (
-          <DiagramCanvas />
+          <>
+            <DiagramCanvas />
+            <CaseAssistantChat />
+          </>
         )}
       </main>
     </div>
@@ -32,3 +36,4 @@ export const App: React.FC = () => {
 };
 
 export default App;
+

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useDiagramStore } from '../../store/useDiagramStore';
-import { Code2, Download, Plus, AlertCircle, RefreshCw, FolderPlus } from 'lucide-react';
+import { Code2, Download, Plus, AlertCircle, RefreshCw, FolderPlus, Bot } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const {
@@ -13,6 +13,8 @@ export const Navbar: React.FC = () => {
     isGenerating,
     error,
     clearError,
+    isAssistantOpen,
+    toggleAssistant,
   } = useDiagramStore();
 
   const [isCreatingDiag, setIsCreatingDiag] = useState(false);
@@ -86,6 +88,18 @@ export const Navbar: React.FC = () => {
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Add Class</span>
+          </button>
+
+          <button
+            onClick={toggleAssistant}
+            className={`flex items-center space-x-1.5 text-xs font-semibold px-3 py-1.5 rounded-md shadow-sm transition border ${
+              isAssistantOpen
+                ? 'bg-sky-600 text-white border-sky-500 hover:bg-sky-700'
+                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+            }`}
+          >
+            <Bot className={`w-3.5 h-3.5 ${isAssistantOpen ? 'text-white' : 'text-sky-600'}`} />
+            <span>Asistente CASE</span>
           </button>
 
           <button

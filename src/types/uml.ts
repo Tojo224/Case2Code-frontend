@@ -166,3 +166,13 @@ export interface CommandExecutionResponse {
   document: CanonicalUmlDocument;
   error?: string | null;
 }
+
+export interface AssistantPromptResponse {
+  success: boolean;
+  reply: string;
+  executed_commands: UmlCommand[];
+  document: CanonicalUmlDocument;
+  error?: string | null;
+}
+
+
