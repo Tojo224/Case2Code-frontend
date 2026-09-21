@@ -5,6 +5,7 @@ import {
   Background,
   BackgroundVariant,
   MiniMap,
+  ConnectionMode,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -32,7 +33,7 @@ export const DiagramCanvas: React.FC = () => {
   const edgeTypes = useMemo(() => ({ umlRelationship: UmlRelationshipEdge }), []);
 
   return (
-    <div className={`w-full h-[calc(100vh-3.5rem)] relative bg-slate-50 dark:bg-slate-950 transition-colors ${activeRelationType ? 'cursor-crosshair' : ''}`}>
+    <div className={`w-full h-full relative bg-slate-50 dark:bg-slate-950 transition-colors ${activeRelationType ? 'cursor-crosshair' : ''}`}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -40,6 +41,7 @@ export const DiagramCanvas: React.FC = () => {
         onEdgesChange={onEdgesChange}
         onNodeDragStop={onNodeDragStop}
         onConnect={onConnect}
+        connectionMode={ConnectionMode.Loose}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView

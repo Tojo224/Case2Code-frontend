@@ -29,11 +29,27 @@ export const UmlRelationshipEdge = memo(({
   let labelY: number;
 
   if (isSelf) {
-    // Beautiful self-loop bezier curve
-    const loopOffset = 65;
-    edgePath = `M ${sourceX} ${sourceY} C ${sourceX + loopOffset} ${sourceY - 25}, ${targetX + loopOffset} ${targetY + 45}, ${targetX} ${targetY}`;
-    labelX = Math.max(sourceX, targetX) + loopOffset * 0.75;
-    labelY = (sourceY + targetY) / 2 + 10;
+    // Professional orthogonal rounded UML loop (filleted corners)
+    const loopW = 55;
+    const loopH = 45;
+    const r = 10;
+
+    const outerX = Math.max(sourceX, targetX) + loopW;
+    const outerY = Math.max(sourceY, targetY) + loopH;
+
+    edgePath = [
+      `M ${sourceX} ${sourceY}`,
+      `L ${outerX - r} ${sourceY}`,
+      `Q ${outerX} ${sourceY} ${outerX} ${sourceY + r}`,
+      `L ${outerX} ${outerY - r}`,
+      `Q ${outerX} ${outerY} ${outerX - r} ${outerY}`,
+      `L ${targetX + r} ${outerY}`,
+      `Q ${targetX} ${outerY} ${targetX} ${outerY - r}`,
+      `L ${targetX} ${targetY}`,
+    ].join(' ');
+
+    labelX = outerX + 24;
+    labelY = (sourceY + outerY) / 2;
   } else {
     const [path, lx, ly] = getSmoothStepPath({
       sourceX,

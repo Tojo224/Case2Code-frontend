@@ -197,13 +197,11 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
     if (connection.source && connection.target) {
       let finalConn = connection;
       if (connection.source === connection.target) {
-        if (!connection.sourceHandle || !connection.targetHandle || connection.sourceHandle === connection.targetHandle) {
-          finalConn = {
-            ...connection,
-            sourceHandle: 'right-source',
-            targetHandle: 'bottom-target',
-          };
-        }
+        finalConn = {
+          ...connection,
+          sourceHandle: 'right-source',
+          targetHandle: 'bottom-target',
+        };
       }
       set({ pendingConnection: finalConn });
     }

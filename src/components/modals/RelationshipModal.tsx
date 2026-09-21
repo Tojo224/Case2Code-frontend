@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDiagramStore } from '../../store/useDiagramStore';
 import { RelationshipType } from '../../types/uml';
-import { GitCommit, X, Info, ArrowLeftRight, Table2, Layers } from 'lucide-react';
+import { GitCommit, X, Info, ArrowLeftRight, Table2, Layers, AlertCircle } from 'lucide-react';
 
 interface RelationshipOption {
   id: RelationshipType;
@@ -119,6 +119,7 @@ export const RelationshipModal: React.FC = () => {
   const [targetCard, setTargetCard] = useState<string>('*');
   const [sourceRole, setSourceRole] = useState<string>('');
   const [targetRole, setTargetRole] = useState<string>('');
+  const [modalError, setModalError] = useState<string | null>(null);
 
   // Many to Many Junction Table
   const [useJunctionTable, setUseJunctionTable] = useState<boolean>(false);
@@ -127,25 +128,31 @@ export const RelationshipModal: React.FC = () => {
   // Sync state when pendingConnection opens
   useEffect(() => {
     if (pendingConnection) {
+      setModalError(null);
       setSourceId(pendingConnection.source || '');
       setTargetId(pendingConnection.target || '');
       setSourceHandle(pendingConnection.sourceHandle || undefined);
       setTargetHandle(pendingConnection.targetHandle || undefined);
 
-      const defaultType = activeRelationType || 'ONE_TO_MANY';
-      setSelectedType(defaultType);
-      const opt = RELATIONSHIP_OPTIONS.find((o) => o.id === defaultType) || RELATIONSHIP_OPTIONS[0];
-      setSourceCard(opt.defaultSourceCard);
-      setTargetCard(opt.defaultTargetCard);
-
-      // Default role if self-referential
+      let defaultType = activeRelationType || 'ONE_TO_MANY';
+      // Self-connection cannot be inheritance
       if (pendingConnection.source === pendingConnection.target) {
+        if (defaultType === 'INHERITANCE' || defaultType === 'REALIZATION') {
+          defaultType = 'ONE_TO_MANY';
+        }
         setSourceRole('subordinados');
         setTargetRole('padre');
+        setSourceHandle('right-source');
+        setTargetHandle('bottom-target');
       } else {
         setSourceRole('');
         setTargetRole('');
       }
+
+      setSelectedType(defaultType);
+      const opt = RELATIONSHIP_OPTIONS.find((o) => o.id === defaultType) || RELATIONSHIP_OPTIONS[0];
+      setSourceCard(opt.defaultSourceCard);
+      setTargetCard(opt.defaultTargetCard);
 
       setUseJunctionTable(defaultType === 'MANY_TO_MANY');
     }
@@ -164,6 +171,17 @@ export const RelationshipModal: React.FC = () => {
 
   // Swap Direction Handler (Volcar relación A ⇄ B)
   const handleSwapDirection = () => {
+    setModalError(null);
+    if (isSelf) {
+      const tmpRole = sourceRole;
+      setSourceRole(targetRole);
+      setTargetRole(tmpRole);
+      const tmpCard = sourceCard;
+      setSourceCard(targetCard);
+      setTargetCard(tmpCard);
+      return;
+    }
+
     const nextSourceId = targetId;
     const nextTargetId = sourceId;
     const nextSourceHandle = targetHandle;
@@ -185,6 +203,11 @@ export const RelationshipModal: React.FC = () => {
   };
 
   const handleSelectType = (option: RelationshipOption) => {
+    setModalError(null);
+    if (isSelf && (option.id === 'INHERITANCE' || option.id === 'REALIZATION')) {
+      setModalError('Una clase no puede heredar o implementar de sí misma. Selecciona una relación asociativa.');
+      return;
+    }
     setSelectedType(option.id);
     setSourceCard(option.defaultSourceCard);
     setTargetCard(option.defaultTargetCard);
@@ -198,6 +221,17 @@ export const RelationshipModal: React.FC = () => {
 
   const handleCreate = async () => {
     try {
+      setModalError(null);
+      if (isSelf && (selectedType === 'INHERITANCE' || selectedType === 'REALIZATION')) {
+        setModalError('Una clase o tabla no puede heredar o implementar de sí misma.');
+        return;
+      }
+
+      if (isSelf && sourceRole.trim() && targetRole.trim() && sourceRole.trim().toLowerCase() === targetRole.trim().toLowerCase()) {
+        setModalError('En una relación recursiva, el rol origen y destino deben tener nombres distintos (ej: "subordinados" y "padre").');
+        return;
+      }
+
       // 1. If N:M with junction table requested, create intermediate class first
       if (selectedType === 'MANY_TO_MANY' && useJunctionTable) {
         const jName = (junctionTableName.trim() || `${sourceClass.name}_${targetClass.name}`).toLowerCase();
@@ -263,8 +297,8 @@ export const RelationshipModal: React.FC = () => {
         command_type: 'CREATE_RELATIONSHIP',
         source_class_id: sourceClass.id,
         target_class_id: targetClass.id,
-        source_handle: sourceHandle,
-        target_handle: targetHandle,
+        source_handle: isSelf ? 'right-source' : sourceHandle,
+        target_handle: isSelf ? 'bottom-target' : targetHandle,
         type: selectedType,
         source_cardinality: isMultiplicityApplicable ? sourceCard || '1' : '',
         target_cardinality: isMultiplicityApplicable ? targetCard || '1' : '',
@@ -273,8 +307,8 @@ export const RelationshipModal: React.FC = () => {
       });
 
       setPendingConnection(null);
-    } catch {
-      // Error handled by diagram store
+    } catch (err: any) {
+      setModalError(err?.message || 'Error al crear la relación. Verifica que no exista una relación idéntica.');
     }
   };
 
@@ -356,13 +390,17 @@ export const RelationshipModal: React.FC = () => {
             <div className="grid grid-cols-2 gap-2 text-xs">
               {RELATIONSHIP_OPTIONS.map((item) => {
                 const isSelected = selectedType === item.id;
+                const isDisabled = isSelf && (item.id === 'INHERITANCE' || item.id === 'REALIZATION');
                 return (
                   <button
                     key={item.id}
                     type="button"
+                    disabled={isDisabled}
                     onClick={() => handleSelectType(item)}
                     className={`p-2.5 rounded-xl border text-left transition flex flex-col justify-between ${
-                      isSelected
+                      isDisabled
+                        ? 'opacity-40 cursor-not-allowed border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850'
+                        : isSelected
                         ? 'border-indigo-500 bg-indigo-50/80 dark:bg-indigo-950/50 text-indigo-900 dark:text-indigo-200 ring-2 ring-indigo-300 dark:ring-indigo-800'
                         : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
                     }`}
@@ -370,7 +408,7 @@ export const RelationshipModal: React.FC = () => {
                     <div className="font-semibold text-slate-900 dark:text-slate-100 flex items-center justify-between">
                       <span>{item.label}</span>
                       <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 font-normal">
-                        {item.symbol}
+                        {isDisabled ? 'No recursivo' : item.symbol}
                       </span>
                     </div>
                   </button>
@@ -481,6 +519,14 @@ export const RelationshipModal: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Modal Error Alert */}
+        {modalError && (
+          <div className="mx-6 mb-2 p-3 bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-700 dark:text-red-300 flex items-start gap-2 animate-in fade-in">
+            <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+            <span>{modalError}</span>
+          </div>
+        )}
 
         {/* Actions */}
         <div className="flex items-center justify-between px-6 py-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-100 dark:border-slate-800">

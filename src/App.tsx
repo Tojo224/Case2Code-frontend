@@ -4,6 +4,7 @@ import { useAuthStore } from './store/useAuthStore';
 import { useCollaborationStore } from './store/useCollaborationStore';
 import { useThemeStore } from './store/useThemeStore';
 import { Navbar } from './components/toolbar/Navbar';
+import { RelationshipSidebar } from './components/toolbar/RelationshipSidebar';
 import { DiagramCanvas } from './components/canvas/DiagramCanvas';
 import { CaseAssistantChat } from './components/assistant/CaseAssistantChat';
 import { InviteModal } from './components/collaboration/InviteModal';
@@ -43,15 +44,18 @@ export const App: React.FC = () => {
   return (
     <div className="w-screen h-screen flex flex-col overflow-hidden bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
       <Navbar />
-      <main className="flex-1 relative">
+      <main className="flex-1 relative flex overflow-hidden">
         {isLoading && !currentDocument ? (
-          <div className="flex items-center justify-center h-full text-slate-400 text-sm">
+          <div className="flex items-center justify-center h-full w-full text-slate-400 text-sm">
             Loading diagram...
           </div>
         ) : (
           <>
-            <DiagramCanvas />
-            <CaseAssistantChat />
+            <RelationshipSidebar />
+            <div className="flex-1 h-full relative overflow-hidden">
+              <DiagramCanvas />
+              <CaseAssistantChat />
+            </div>
           </>
         )}
       </main>
