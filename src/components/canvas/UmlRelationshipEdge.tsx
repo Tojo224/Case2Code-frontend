@@ -22,15 +22,32 @@ export const UmlRelationshipEdge = memo(({
 }: EdgeProps & { data?: UmlRelationship }) => {
   const { dispatchCommand } = useDiagramStore();
 
-  const [edgePath, labelX, labelY] = getSmoothStepPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-    borderRadius: 8,
-  });
+  const isSelf = Boolean(data?.source_class_id && data?.target_class_id && data.source_class_id === data.target_class_id);
+
+  let edgePath: string;
+  let labelX: number;
+  let labelY: number;
+
+  if (isSelf) {
+    // Beautiful self-loop bezier curve
+    const loopOffset = 65;
+    edgePath = `M ${sourceX} ${sourceY} C ${sourceX + loopOffset} ${sourceY - 25}, ${targetX + loopOffset} ${targetY + 45}, ${targetX} ${targetY}`;
+    labelX = Math.max(sourceX, targetX) + loopOffset * 0.75;
+    labelY = (sourceY + targetY) / 2 + 10;
+  } else {
+    const [path, lx, ly] = getSmoothStepPath({
+      sourceX,
+      sourceY,
+      sourcePosition,
+      targetX,
+      targetY,
+      targetPosition,
+      borderRadius: 8,
+    });
+    edgePath = path;
+    labelX = lx;
+    labelY = ly;
+  }
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -62,32 +79,43 @@ export const UmlRelationshipEdge = memo(({
     : undefined;
 
   const getRelationshipBadge = () => {
+    let base = '';
     switch (relType) {
       case 'ONE_TO_MANY':
-        return data?.source_cardinality && data?.target_cardinality
+        base = data?.source_cardinality && data?.target_cardinality
           ? `${data.source_cardinality} : ${data.target_cardinality}`
           : '1 : N';
+        break;
       case 'MANY_TO_ONE':
-        return data?.source_cardinality && data?.target_cardinality
+        base = data?.source_cardinality && data?.target_cardinality
           ? `${data.source_cardinality} : ${data.target_cardinality}`
           : 'N : 1';
+        break;
       case 'ONE_TO_ONE':
-        return '1 : 1';
+        base = '1 : 1';
+        break;
       case 'MANY_TO_MANY':
-        return 'N : M';
+        base = 'N : M';
+        break;
       case 'COMPOSITION':
-        return '◆ Composición';
+        base = '◆ Composición';
+        break;
       case 'AGGREGATION':
-        return '◇ Agregación';
+        base = '◇ Agregación';
+        break;
       case 'INHERITANCE':
-        return '▷ extends';
+        base = '▷ extends';
+        break;
       case 'REALIZATION':
-        return '··▷ implements';
+        base = '··▷ implements';
+        break;
       case 'DEPENDENCY':
-        return '··> uses';
+        base = '··> uses';
+        break;
       default:
-        return 'relates';
+        base = 'relates';
     }
+    return isSelf ? `↺ ${base}` : base;
   };
 
   return (

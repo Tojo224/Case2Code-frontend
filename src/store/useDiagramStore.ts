@@ -8,7 +8,7 @@ import {
   applyEdgeChanges,
   Connection,
 } from '@xyflow/react';
-import { CanonicalUmlDocument, UmlClass, UmlCommand } from '../types/uml';
+import { CanonicalUmlDocument, UmlClass, UmlCommand, RelationshipType } from '../types/uml';
 import { api } from '../services/api';
 import { collaborationWs } from '../services/websocket';
 import { useCollaborationStore } from './useCollaborationStore';
@@ -25,12 +25,14 @@ interface DiagramState {
   // Selected elements for inspectors/modals
   selectedClass: UmlClass | null;
   pendingConnection: Connection | null;
+  activeRelationType: RelationshipType | null;
 
   // Actions
   fetchDiagrams: () => Promise<void>;
   createDiagram: (name: string, description?: string) => Promise<void>;
   loadDiagram: (diagramId: string) => Promise<void>;
   dispatchCommand: (command: UmlCommand) => Promise<void>;
+  setActiveRelationType: (type: RelationshipType | null) => void;
   
   // Canvas events
   onNodesChange: OnNodesChange;
@@ -84,6 +86,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
   error: null,
   selectedClass: null,
   pendingConnection: null,
+  activeRelationType: null,
 
   fetchDiagrams: async () => {
     try {
@@ -191,11 +194,22 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
   },
 
   onConnect: (connection) => {
-    if (connection.source && connection.target && connection.source !== connection.target) {
-      set({ pendingConnection: connection });
+    if (connection.source && connection.target) {
+      let finalConn = connection;
+      if (connection.source === connection.target) {
+        if (!connection.sourceHandle || !connection.targetHandle || connection.sourceHandle === connection.targetHandle) {
+          finalConn = {
+            ...connection,
+            sourceHandle: 'right-source',
+            targetHandle: 'bottom-target',
+          };
+        }
+      }
+      set({ pendingConnection: finalConn });
     }
   },
 
+  setActiveRelationType: (type) => set({ activeRelationType: type }),
   setSelectedClass: (cls) => set({ selectedClass: cls }),
   setPendingConnection: (conn) => set({ pendingConnection: conn }),
   clearError: () => set({ error: null }),
@@ -268,6 +282,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       edges: [],
       selectedClass: null,
       pendingConnection: null,
+      activeRelationType: null,
     });
   },
 }));

@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDiagramStore } from '../../store/useDiagramStore';
 import { RelationshipType } from '../../types/uml';
-import { GitCommit, X, Info } from 'lucide-react';
+import { GitCommit, X, Info, ArrowLeftRight, Table2, Layers } from 'lucide-react';
 
 interface RelationshipOption {
   id: RelationshipType;
   label: string;
-  category: 'association' | 'structural' | 'hierarchy';
+  category: 'database' | 'structural' | 'hierarchy';
   symbol: string;
   description: string;
   defaultSourceCard: string;
@@ -14,131 +14,264 @@ interface RelationshipOption {
 }
 
 const RELATIONSHIP_OPTIONS: RelationshipOption[] = [
-  // Associations
+  // Database Associations
   {
     id: 'ONE_TO_MANY',
-    label: '1 : N (One to Many)',
-    category: 'association',
+    label: '1 : N (Uno a Muchos)',
+    category: 'database',
     symbol: '1 ──────► *',
-    description: 'A parent entity owns a list or collection of children (e.g., Department has Employees).',
+    description: 'La entidad origen posee una colección de destinos (ej: Departamento tiene Empleados).',
     defaultSourceCard: '1',
     defaultTargetCard: '*',
   },
   {
     id: 'MANY_TO_ONE',
-    label: 'N : 1 (Many to One)',
-    category: 'association',
+    label: 'N : 1 (Muchos a Uno)',
+    category: 'database',
     symbol: '* ──────► 1',
-    description: 'Multiple entities reference a single parent (e.g., Employee belongs to Department).',
+    description: 'Múltiples registros referencian a un único registro padre mediante Clave Foránea (FK).',
     defaultSourceCard: '*',
     defaultTargetCard: '1',
   },
   {
     id: 'ONE_TO_ONE',
-    label: '1 : 1 (One to One)',
-    category: 'association',
+    label: '1 : 1 (Uno a Uno)',
+    category: 'database',
     symbol: '1 ──────► 1',
-    description: 'Each entity is associated with exactly one other entity (e.g., User has Profile).',
+    description: 'Cada registro se asocia exclusivamente a un único registro de la otra tabla (FK única).',
     defaultSourceCard: '1',
     defaultTargetCard: '1',
   },
   {
     id: 'MANY_TO_MANY',
-    label: 'N : M (Many to Many)',
-    category: 'association',
+    label: 'N : M (Muchos a Muchos)',
+    category: 'database',
     symbol: '* ◄────► *',
-    description: 'Shared cross-collection linked via a join table (e.g., Student participates in Courses).',
+    description: 'Relación bidireccional vinculada a través de una tabla intermedia / pivote.',
     defaultSourceCard: '*',
     defaultTargetCard: '*',
   },
   // Structural (Whole-Part)
   {
     id: 'COMPOSITION',
-    label: 'Composition (◆)',
+    label: 'Composición (◆)',
     category: 'structural',
     symbol: '◆──────►',
-    description: 'Strict whole-part lifecycle (owns-a). If parent is deleted, parts are automatically deleted in cascade.',
+    description: 'Ciclo de vida estricto (owns-a). Si se elimina el padre, los hijos se eliminan en CASCADA.',
     defaultSourceCard: '1',
     defaultTargetCard: '*',
   },
   {
     id: 'AGGREGATION',
-    label: 'Aggregation (◇)',
+    label: 'Agregación (◇)',
     category: 'structural',
     symbol: '◇──────►',
-    description: 'Shared whole-part relationship (has-a). The part entities can exist independently without the container.',
+    description: 'Relación todo-parte compartida (has-a). La parte puede existir independientemente del contenedor.',
     defaultSourceCard: '1',
     defaultTargetCard: '*',
   },
-  // Hierarchy & Usage
+  // Hierarchy
   {
     id: 'INHERITANCE',
-    label: 'Inheritance (▷ extends)',
+    label: 'Herencia (▷ extends)',
     category: 'hierarchy',
     symbol: '───────▷',
-    description: 'Subclass inherits fields and behavior from Superclass (e.g., Manager extends Employee).',
+    description: 'La subclase hereda atributos y comportamiento de la superclase.',
     defaultSourceCard: '',
     defaultTargetCard: '',
   },
   {
     id: 'REALIZATION',
-    label: 'Realization (··▷ implements)',
+    label: 'Realización (··▷ implements)',
     category: 'hierarchy',
     symbol: '· · · · ▷',
-    description: 'Class implements the contract of an Interface or abstract specification.',
+    description: 'La clase implementa el contrato de una interfaz abstracta.',
     defaultSourceCard: '',
     defaultTargetCard: '',
   },
   {
     id: 'DEPENDENCY',
-    label: 'Dependency (··> uses)',
+    label: 'Dependencia (··> uses)',
     category: 'hierarchy',
     symbol: '· · · · >',
-    description: 'Temporary usage or collaborator reference (e.g., Service injected into Controller).',
+    description: 'Uso temporal o inyección de dependencia entre componentes.',
     defaultSourceCard: '',
     defaultTargetCard: '',
   },
 ];
 
 export const RelationshipModal: React.FC = () => {
-  const { pendingConnection, setPendingConnection, currentDocument, dispatchCommand } = useDiagramStore();
+  const {
+    pendingConnection,
+    setPendingConnection,
+    currentDocument,
+    dispatchCommand,
+    activeRelationType,
+  } = useDiagramStore();
+
+  const [sourceId, setSourceId] = useState<string>('');
+  const [targetId, setTargetId] = useState<string>('');
+  const [sourceHandle, setSourceHandle] = useState<string | undefined>(undefined);
+  const [targetHandle, setTargetHandle] = useState<string | undefined>(undefined);
+
   const [selectedType, setSelectedType] = useState<RelationshipType>('ONE_TO_MANY');
   const [sourceCard, setSourceCard] = useState<string>('1');
   const [targetCard, setTargetCard] = useState<string>('*');
   const [sourceRole, setSourceRole] = useState<string>('');
   const [targetRole, setTargetRole] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'association' | 'structural' | 'hierarchy'>('association');
+
+  // Many to Many Junction Table
+  const [useJunctionTable, setUseJunctionTable] = useState<boolean>(false);
+  const [junctionTableName, setJunctionTableName] = useState<string>('');
+
+  // Sync state when pendingConnection opens
+  useEffect(() => {
+    if (pendingConnection) {
+      setSourceId(pendingConnection.source || '');
+      setTargetId(pendingConnection.target || '');
+      setSourceHandle(pendingConnection.sourceHandle || undefined);
+      setTargetHandle(pendingConnection.targetHandle || undefined);
+
+      const defaultType = activeRelationType || 'ONE_TO_MANY';
+      setSelectedType(defaultType);
+      const opt = RELATIONSHIP_OPTIONS.find((o) => o.id === defaultType) || RELATIONSHIP_OPTIONS[0];
+      setSourceCard(opt.defaultSourceCard);
+      setTargetCard(opt.defaultTargetCard);
+
+      // Default role if self-referential
+      if (pendingConnection.source === pendingConnection.target) {
+        setSourceRole('subordinados');
+        setTargetRole('padre');
+      } else {
+        setSourceRole('');
+        setTargetRole('');
+      }
+
+      setUseJunctionTable(defaultType === 'MANY_TO_MANY');
+    }
+  }, [pendingConnection, activeRelationType]);
 
   if (!pendingConnection || !currentDocument) return null;
 
-  const sourceClass = currentDocument.classes.find((c) => c.id === pendingConnection.source);
-  const targetClass = currentDocument.classes.find((c) => c.id === pendingConnection.target);
+  const sourceClass = currentDocument.classes.find((c) => c.id === sourceId);
+  const targetClass = currentDocument.classes.find((c) => c.id === targetId);
 
   if (!sourceClass || !targetClass) return null;
 
+  const isSelf = sourceId === targetId;
   const currentOption = RELATIONSHIP_OPTIONS.find((o) => o.id === selectedType) || RELATIONSHIP_OPTIONS[0];
   const isMultiplicityApplicable = selectedType !== 'INHERITANCE' && selectedType !== 'REALIZATION' && selectedType !== 'DEPENDENCY';
+
+  // Swap Direction Handler (Volcar relación A ⇄ B)
+  const handleSwapDirection = () => {
+    const nextSourceId = targetId;
+    const nextTargetId = sourceId;
+    const nextSourceHandle = targetHandle;
+    const nextTargetHandle = sourceHandle;
+
+    setSourceId(nextSourceId);
+    setTargetId(nextTargetId);
+    setSourceHandle(nextSourceHandle);
+    setTargetHandle(nextTargetHandle);
+
+    // Swap cardinalities and roles
+    const tmpCard = sourceCard;
+    setSourceCard(targetCard);
+    setTargetCard(tmpCard);
+
+    const tmpRole = sourceRole;
+    setSourceRole(targetRole);
+    setTargetRole(tmpRole);
+  };
 
   const handleSelectType = (option: RelationshipOption) => {
     setSelectedType(option.id);
     setSourceCard(option.defaultSourceCard);
     setTargetCard(option.defaultTargetCard);
+    if (option.id === 'MANY_TO_MANY') {
+      setUseJunctionTable(true);
+      setJunctionTableName(`${sourceClass.name}_${targetClass.name}`.toLowerCase());
+    } else {
+      setUseJunctionTable(false);
+    }
   };
 
   const handleCreate = async () => {
     try {
+      // 1. If N:M with junction table requested, create intermediate class first
+      if (selectedType === 'MANY_TO_MANY' && useJunctionTable) {
+        const jName = (junctionTableName.trim() || `${sourceClass.name}_${targetClass.name}`).toLowerCase();
+        const jClassId = `cls-${jName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+        // Create junction class if not exists
+        const exists = currentDocument.classes.some((c) => c.name.toLowerCase() === jName.toLowerCase());
+        if (!exists) {
+          const midX = Math.round((sourceClass.position.x + targetClass.position.x) / 2);
+          const midY = Math.round((sourceClass.position.y + targetClass.position.y) / 2) + 120;
+          await dispatchCommand({
+            command_type: 'CREATE_CLASS',
+            class_id: jClassId,
+            name: jName,
+            position: { x: midX, y: midY },
+          });
+
+          // Add FK attributes
+          await dispatchCommand({
+            command_type: 'ADD_ATTRIBUTE',
+            class_id: jClassId,
+            name: `${sourceClass.name.toLowerCase()}_id`,
+            type: 'Long',
+            primary_key: false,
+            nullable: false,
+          });
+          await dispatchCommand({
+            command_type: 'ADD_ATTRIBUTE',
+            class_id: jClassId,
+            name: `${targetClass.name.toLowerCase()}_id`,
+            type: 'Long',
+            primary_key: false,
+            nullable: false,
+          });
+
+          // Connect source -> junction (1:N)
+          await dispatchCommand({
+            command_type: 'CREATE_RELATIONSHIP',
+            source_class_id: sourceClass.id,
+            target_class_id: jClassId,
+            type: 'ONE_TO_MANY',
+            source_cardinality: '1',
+            target_cardinality: '*',
+          });
+
+          // Connect target -> junction (1:N)
+          await dispatchCommand({
+            command_type: 'CREATE_RELATIONSHIP',
+            source_class_id: targetClass.id,
+            target_class_id: jClassId,
+            type: 'ONE_TO_MANY',
+            source_cardinality: '1',
+            target_cardinality: '*',
+          });
+
+          setPendingConnection(null);
+          return;
+        }
+      }
+
+      // 2. Standard direct relationship
       await dispatchCommand({
         command_type: 'CREATE_RELATIONSHIP',
         source_class_id: sourceClass.id,
         target_class_id: targetClass.id,
-        source_handle: pendingConnection.sourceHandle || undefined,
-        target_handle: pendingConnection.targetHandle || undefined,
+        source_handle: sourceHandle,
+        target_handle: targetHandle,
         type: selectedType,
         source_cardinality: isMultiplicityApplicable ? sourceCard || '1' : '',
         target_cardinality: isMultiplicityApplicable ? targetCard || '1' : '',
         source_role: sourceRole.trim() || undefined,
         target_role: targetRole.trim() || undefined,
       });
+
       setPendingConnection(null);
     } catch {
       // Error handled by diagram store
@@ -146,15 +279,15 @@ export const RelationshipModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-xl w-full border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80">
-          <div className="flex items-center space-x-2 text-slate-800 dark:text-slate-100 font-semibold">
-            <div className="p-1.5 bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 rounded-lg">
-              <GitCommit className="w-5 h-5" />
+        <div className="flex items-center justify-between px-6 py-3.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80">
+          <div className="flex items-center space-x-2 text-slate-800 dark:text-slate-100 font-semibold text-sm">
+            <div className="p-1.5 bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 rounded-lg">
+              <GitCommit className="w-4 h-4" />
             </div>
-            <span>Create UML Relationship</span>
+            <span>Configurar Relación de Base de Datos</span>
           </div>
           <button
             onClick={() => setPendingConnection(null)}
@@ -166,170 +299,211 @@ export const RelationshipModal: React.FC = () => {
 
         {/* Content */}
         <div className="p-6 space-y-5 overflow-y-auto">
-          {/* Dynamic Visual Diagram Preview */}
+          {/* Dynamic Visual Diagram Preview with SWAP Button */}
           <div className="bg-slate-900 dark:bg-slate-950 text-white rounded-xl p-4 shadow-inner border border-slate-800">
-            <div className="flex items-center justify-between font-mono text-sm">
-              <div className="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg text-sky-300 font-bold">
+            <div className="flex items-center justify-between gap-3 font-mono text-sm">
+              {/* Source Node */}
+              <div className="flex-1 text-center bg-slate-800/90 border border-slate-700 px-3 py-2 rounded-lg text-sky-300 font-bold truncate">
                 {sourceClass.name}
               </div>
-              <div className="flex flex-col items-center px-3">
-                <span className="text-amber-400 font-bold tracking-widest text-base">
+
+              {/* Center Flow / Swap Button */}
+              <div className="flex flex-col items-center">
+                <button
+                  type="button"
+                  onClick={handleSwapDirection}
+                  disabled={isSelf}
+                  className="flex items-center gap-1.5 px-3 py-1 bg-indigo-600/30 hover:bg-indigo-600 border border-indigo-500/50 hover:border-indigo-400 rounded-full text-indigo-200 text-xs font-sans transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                  title={isSelf ? 'Auto-referencia (misma clase)' : 'Volcar / Invertir sentido (A ⇄ B)'}
+                >
+                  <ArrowLeftRight className="w-3.5 h-3.5" />
+                  <span className="font-semibold text-[11px]">Volcar Sentido</span>
+                </button>
+                <span className="text-amber-400 font-bold tracking-widest text-base mt-1">
                   {currentOption.symbol}
                 </span>
                 {isMultiplicityApplicable && (
-                  <span className="text-[11px] text-slate-400 mt-0.5">
+                  <span className="text-[11px] text-slate-400 font-mono">
                     {sourceCard || '1'} : {targetCard || '*'}
                   </span>
                 )}
               </div>
-              <div className="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg text-emerald-300 font-bold">
+
+              {/* Target Node */}
+              <div className="flex-1 text-center bg-slate-800/90 border border-slate-700 px-3 py-2 rounded-lg text-emerald-300 font-bold truncate">
                 {targetClass.name}
               </div>
             </div>
-            <p className="mt-3 text-xs text-slate-400 border-t border-slate-800/80 pt-2 flex items-start space-x-1.5">
+
+            {isSelf && (
+              <div className="mt-2.5 pt-2 border-t border-slate-800 flex items-center justify-center gap-1.5 text-xs text-amber-400 font-sans">
+                <Layers className="w-3.5 h-3.5" />
+                <span>Relación Recursiva / Auto-referencial (se apunta a sí misma)</span>
+              </div>
+            )}
+
+            <p className="mt-2.5 text-xs text-slate-400 border-t border-slate-800/80 pt-2 flex items-start space-x-1.5 font-sans">
               <Info className="w-3.5 h-3.5 text-slate-400 mt-0.5 flex-shrink-0" />
               <span>{currentOption.description}</span>
             </p>
           </div>
 
-          {/* Category Tabs */}
-          <div className="flex rounded-lg bg-slate-100 dark:bg-slate-800 p-1 text-xs font-semibold">
-            <button
-              type="button"
-              onClick={() => setActiveTab('association')}
-              className={`flex-1 py-1.5 rounded-md transition ${
-                activeTab === 'association'
-                  ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-            >
-              Associations
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('structural')}
-              className={`flex-1 py-1.5 rounded-md transition ${
-                activeTab === 'structural'
-                  ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-            >
-              Structural (◇/◆)
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('hierarchy')}
-              className={`flex-1 py-1.5 rounded-md transition ${
-                activeTab === 'hierarchy'
-                  ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-            >
-              Hierarchy (▷/··▷)
-            </button>
+          {/* Quick Relationship Grid (DB-first clean list) */}
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+              Tipo de Relación
+            </label>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              {RELATIONSHIP_OPTIONS.map((item) => {
+                const isSelected = selectedType === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleSelectType(item)}
+                    className={`p-2.5 rounded-xl border text-left transition flex flex-col justify-between ${
+                      isSelected
+                        ? 'border-indigo-500 bg-indigo-50/80 dark:bg-indigo-950/50 text-indigo-900 dark:text-indigo-200 ring-2 ring-indigo-300 dark:ring-indigo-800'
+                        : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    <div className="font-semibold text-slate-900 dark:text-slate-100 flex items-center justify-between">
+                      <span>{item.label}</span>
+                      <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 font-normal">
+                        {item.symbol}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          {/* Relationship Cards */}
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            {RELATIONSHIP_OPTIONS.filter((o) => o.category === activeTab).map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => handleSelectType(item)}
-                className={`p-3 rounded-xl border text-left font-medium transition flex flex-col justify-between ${
-                  selectedType === item.id
-                    ? 'border-sky-500 bg-sky-50/70 dark:bg-sky-950/40 text-sky-900 dark:text-sky-200 ring-2 ring-sky-200 dark:ring-sky-800'
-                    : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
-                }`}
-              >
-                <div className="font-semibold text-slate-900 dark:text-slate-100 mb-1">{item.label}</div>
-                <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400">{item.symbol}</div>
-              </button>
-            ))}
-          </div>
+          {/* Special Option: N:M Intermediate / Junction Table */}
+          {selectedType === 'MANY_TO_MANY' && (
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-xl space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-semibold text-xs">
+                  <Table2 className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                  <span>Tabla Intermedia / Pivote (Junction Table)</span>
+                </div>
+                <input
+                  type="checkbox"
+                  id="junctionToggle"
+                  checked={useJunctionTable}
+                  onChange={(e) => setUseJunctionTable(e.target.checked)}
+                  className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                />
+              </div>
 
-          {/* Multiplicity Configuration (If Applicable) */}
-          {isMultiplicityApplicable && (
+              {useJunctionTable && (
+                <div>
+                  <label className="block text-[11px] font-medium text-amber-800 dark:text-amber-300 mb-1">
+                    Nombre de la tabla intermedia que se creará:
+                  </label>
+                  <input
+                    type="text"
+                    value={junctionTableName}
+                    onChange={(e) => setJunctionTableName(e.target.value)}
+                    placeholder={`${sourceClass.name}_${targetClass.name}`.toLowerCase()}
+                    className="w-full text-xs border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-lg p-2 font-mono focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                  <p className="text-[10px] text-amber-700 dark:text-amber-400 mt-1">
+                    Se creará la entidad intermedia automáticamente con las dos Claves Foráneas (FK) y dos relaciones 1:N en el diagrama.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Multiplicity Configuration */}
+          {isMultiplicityApplicable && !useJunctionTable && (
             <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                  Source Multiplicity ({sourceClass.name})
+                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 truncate">
+                  Cardinalidad en {sourceClass.name} (Origen)
                 </label>
                 <select
                   value={sourceCard}
                   onChange={(e) => setSourceCard(e.target.value)}
-                  className="w-full text-xs font-mono border border-slate-200 dark:border-slate-700 rounded-lg p-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  className="w-full text-xs font-mono border border-slate-200 dark:border-slate-700 rounded-lg p-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="1">1 (One)</option>
-                  <option value="*">* (Many)</option>
-                  <option value="0..1">0..1 (Zero or One)</option>
-                  <option value="1..*">1..* (One or More)</option>
+                  <option value="1">1 (Uno obligatorio)</option>
+                  <option value="*">* (Muchos)</option>
+                  <option value="0..1">0..1 (Cero o Uno)</option>
+                  <option value="1..*">1..* (Uno o Más)</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                  Target Multiplicity ({targetClass.name})
+                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 truncate">
+                  Cardinalidad en {targetClass.name} (Destino)
                 </label>
                 <select
                   value={targetCard}
                   onChange={(e) => setTargetCard(e.target.value)}
-                  className="w-full text-xs font-mono border border-slate-200 dark:border-slate-700 rounded-lg p-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  className="w-full text-xs font-mono border border-slate-200 dark:border-slate-700 rounded-lg p-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="*">* (Many)</option>
-                  <option value="1">1 (One)</option>
-                  <option value="0..1">0..1 (Zero or One)</option>
-                  <option value="1..*">1..* (One or More)</option>
+                  <option value="*">* (Muchos)</option>
+                  <option value="1">1 (Uno obligatorio)</option>
+                  <option value="0..1">0..1 (Cero o Uno)</option>
+                  <option value="1..*">1..* (Uno o Más)</option>
                 </select>
               </div>
             </div>
           )}
 
-          {/* Optional Role Names */}
+          {/* Roles / Nombres de campo FK (Opcional) */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
-                Source Role (optional)
+                Rol / Nombre de FK en {sourceClass.name} (opcional)
               </label>
               <input
                 type="text"
-                placeholder="e.g. author"
+                placeholder={isSelf ? 'subordinados' : 'ej: pedidos'}
                 value={sourceRole}
                 onChange={(e) => setSourceRole(e.target.value)}
-                className="w-full text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                className="w-full text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
             <div>
               <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
-                Target Role (optional)
+                Rol / Nombre de FK en {targetClass.name} (opcional)
               </label>
               <input
                 type="text"
-                placeholder="e.g. books"
+                placeholder={isSelf ? 'padre / supervisor' : 'ej: cliente'}
                 value={targetRole}
                 onChange={(e) => setTargetRole(e.target.value)}
-                className="w-full text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                className="w-full text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
           </div>
         </div>
 
         {/* Actions */}
-        <div className="flex items-center justify-end space-x-2 px-6 py-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-100 dark:border-slate-800">
-          <button
-            type="button"
-            onClick={() => setPendingConnection(null)}
-            className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleCreate}
-            className="px-5 py-2 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-700 rounded-lg shadow-sm transition"
-          >
-            Create Relationship
-          </button>
+        <div className="flex items-center justify-between px-6 py-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-100 dark:border-slate-800">
+          <div className="text-[11px] text-slate-500 dark:text-slate-400">
+            {sourceClass.name} ➔ {targetClass.name}
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              onClick={() => setPendingConnection(null)}
+              className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleCreate}
+              className="px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition"
+            >
+              Confirmar y Crear Relación
+            </button>
+          </div>
         </div>
       </div>
     </div>

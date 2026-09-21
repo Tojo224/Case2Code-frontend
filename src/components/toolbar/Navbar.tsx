@@ -4,6 +4,7 @@ import { Code2, Download, Plus, AlertCircle, RefreshCw, FolderPlus, Bot } from '
 import { CollaboratorAvatars } from '../collaboration/CollaboratorAvatars';
 import { UserMenu } from '../auth/UserMenu';
 import { ThemeToggle } from './ThemeToggle';
+import { RelationshipPalette } from './RelationshipPalette';
 
 export const Navbar: React.FC = () => {
   const {
@@ -82,6 +83,9 @@ export const Navbar: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* DB-First Relationship Toolbar */}
+        <RelationshipPalette />
 
         {/* Action Controls */}
         <div className="flex items-center space-x-2.5">

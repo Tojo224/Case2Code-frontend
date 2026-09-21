@@ -23,6 +23,8 @@ export const DiagramCanvas: React.FC = () => {
     onEdgesChange,
     onNodeDragStop,
     onConnect,
+    activeRelationType,
+    setActiveRelationType,
   } = useDiagramStore();
   const isDark = useThemeStore((s) => s.isDark);
 
@@ -30,7 +32,7 @@ export const DiagramCanvas: React.FC = () => {
   const edgeTypes = useMemo(() => ({ umlRelationship: UmlRelationshipEdge }), []);
 
   return (
-    <div className="w-full h-[calc(100vh-3.5rem)] relative bg-slate-50 dark:bg-slate-950 transition-colors">
+    <div className={`w-full h-[calc(100vh-3.5rem)] relative bg-slate-50 dark:bg-slate-950 transition-colors ${activeRelationType ? 'cursor-crosshair' : ''}`}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -58,6 +60,20 @@ export const DiagramCanvas: React.FC = () => {
         />
         <LiveCursors />
       </ReactFlow>
+
+      {/* Floating Mode Indicator */}
+      {activeRelationType && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2.5 px-4 py-2 bg-indigo-600/90 hover:bg-indigo-600 text-white rounded-full shadow-lg backdrop-blur-xs text-xs font-medium border border-indigo-400/40 animate-fade-in">
+          <span>Modo <strong>{activeRelationType}</strong>: arrastrá entre dos clases (o a sí misma) para conectar</span>
+          <button
+            onClick={() => setActiveRelationType(null)}
+            className="p-0.5 hover:bg-white/20 rounded-full transition"
+            title="Cancelar (Esc)"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Relationship Creation Modal */}
       <RelationshipModal />
