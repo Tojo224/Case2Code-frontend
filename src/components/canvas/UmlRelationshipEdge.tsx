@@ -5,7 +5,7 @@ import {
   EdgeProps,
   getSmoothStepPath,
 } from '@xyflow/react';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Pencil } from 'lucide-react';
 import { UmlRelationship } from '../../types/uml';
 import { useDiagramStore } from '../../store/useDiagramStore';
 
@@ -20,7 +20,7 @@ export const UmlRelationshipEdge = memo(({
   style = {},
   data,
 }: EdgeProps & { data?: UmlRelationship }) => {
-  const { dispatchCommand } = useDiagramStore();
+  const { dispatchCommand, setEditingRelationship } = useDiagramStore();
 
   const isSelf = Boolean(data?.source_class_id && data?.target_class_id && data.source_class_id === data.target_class_id);
 
@@ -210,7 +210,12 @@ export const UmlRelationshipEdge = memo(({
             transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
             pointerEvents: 'all',
           }}
-          className="nodrag nopan group flex items-center space-x-1.5 bg-white/95 px-2.5 py-1 rounded-full border border-slate-300 shadow-md text-[11px] font-mono font-semibold text-slate-700 hover:border-sky-400 hover:text-sky-700 transition"
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            if (data) setEditingRelationship(data);
+          }}
+          title="Doble clic para editar relación"
+          className="nodrag nopan group flex items-center space-x-1.5 bg-white/95 dark:bg-slate-800/95 px-2.5 py-1 rounded-full border border-slate-300 dark:border-slate-700 shadow-md text-[11px] font-mono font-semibold text-slate-700 dark:text-slate-200 hover:border-indigo-400 dark:hover:border-indigo-500 transition cursor-pointer select-none"
         >
           <span>{getRelationshipBadge()}</span>
           {data?.target_role && (
@@ -218,6 +223,16 @@ export const UmlRelationshipEdge = memo(({
               ({data.target_role})
             </span>
           )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (data) setEditingRelationship(data);
+            }}
+            title="Editar relación"
+            className="opacity-0 group-hover:opacity-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition text-slate-400 ml-0.5"
+          >
+            <Pencil className="w-3 h-3" />
+          </button>
           <button
             onClick={handleDelete}
             title="Delete relationship"

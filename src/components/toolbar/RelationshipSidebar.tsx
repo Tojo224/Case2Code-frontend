@@ -103,7 +103,7 @@ const TOOLS: SidebarTool[] = [
 ];
 
 export const RelationshipSidebar: React.FC = () => {
-  const { activeRelationType, setActiveRelationType } = useDiagramStore();
+  const { activeRelationType, setActiveRelationType, junctionConfig, setJunctionConfig } = useDiagramStore();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [hoveredTool, setHoveredTool] = useState<SidebarTool | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ top: number }>({ top: 0 });
@@ -217,6 +217,30 @@ export const RelationshipSidebar: React.FC = () => {
                   </div>
                 )}
               </button>
+
+              {/* Inline Junction Table Config for N:M */}
+              {tool.type === 'MANY_TO_MANY' && isActive && !isCollapsed && (
+                <div className="p-2.5 my-1 bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl space-y-1.5 text-xs animate-in fade-in duration-150">
+                  <label className="flex items-center gap-2 cursor-pointer text-amber-900 dark:text-amber-200 font-semibold text-[11px]">
+                    <input
+                      type="checkbox"
+                      checked={junctionConfig.auto}
+                      onChange={(e) => setJunctionConfig({ ...junctionConfig, auto: e.target.checked })}
+                      className="rounded text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span>Tabla intermedia auto</span>
+                  </label>
+                  {junctionConfig.auto && (
+                    <input
+                      type="text"
+                      placeholder="Nombre opcional (ej: a_b)"
+                      value={junctionConfig.name}
+                      onChange={(e) => setJunctionConfig({ ...junctionConfig, name: e.target.value })}
+                      className="w-full text-[11px] px-2 py-1 bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700/80 rounded-md font-mono text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    />
+                  )}
+                </div>
+              )}
             </React.Fragment>
           );
         })}

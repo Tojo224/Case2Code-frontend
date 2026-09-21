@@ -150,6 +150,19 @@ export interface CreateRelationshipCommand extends BaseCommand {
   target_handle?: string | null;
 }
 
+export interface UpdateRelationshipCommand extends BaseCommand {
+  command_type: 'UPDATE_RELATIONSHIP';
+  relationship_id: string;
+  name?: string | null;
+  type?: RelationshipType;
+  source_cardinality?: string;
+  target_cardinality?: string;
+  source_role?: string | null;
+  target_role?: string | null;
+  source_handle?: string | null;
+  target_handle?: string | null;
+}
+
 export interface DeleteRelationshipCommand extends BaseCommand {
   command_type: 'DELETE_RELATIONSHIP';
   relationship_id: string;
@@ -164,6 +177,7 @@ export type UmlCommand =
   | UpdateAttributeCommand
   | DeleteAttributeCommand
   | CreateRelationshipCommand
+  | UpdateRelationshipCommand
   | DeleteRelationshipCommand;
 
 export interface CommandExecutionResponse {

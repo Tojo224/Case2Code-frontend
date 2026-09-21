@@ -1,7 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useDiagramStore } from '../../store/useDiagramStore';
 import { RelationshipType } from '../../types/uml';
-import { GitCommit, X, Info, ArrowLeftRight, Table2, Layers, AlertCircle } from 'lucide-react';
+import {
+  GitCommit,
+  X,
+  Info,
+  ArrowLeftRight,
+  Layers,
+  AlertCircle,
+  Trash2,
+  Check,
+} from 'lucide-react';
 
 interface RelationshipOption {
   id: RelationshipType;
@@ -102,11 +111,10 @@ const RELATIONSHIP_OPTIONS: RelationshipOption[] = [
 
 export const RelationshipModal: React.FC = () => {
   const {
-    pendingConnection,
-    setPendingConnection,
+    editingRelationship,
+    setEditingRelationship,
     currentDocument,
     dispatchCommand,
-    activeRelationType,
   } = useDiagramStore();
 
   const [sourceId, setSourceId] = useState<string>('');
@@ -119,46 +127,28 @@ export const RelationshipModal: React.FC = () => {
   const [targetCard, setTargetCard] = useState<string>('*');
   const [sourceRole, setSourceRole] = useState<string>('');
   const [targetRole, setTargetRole] = useState<string>('');
+  const [isSwapped, setIsSwapped] = useState<boolean>(false);
   const [modalError, setModalError] = useState<string | null>(null);
 
-  // Many to Many Junction Table
-  const [useJunctionTable, setUseJunctionTable] = useState<boolean>(false);
-  const [junctionTableName, setJunctionTableName] = useState<string>('');
-
-  // Sync state when pendingConnection opens
+  // Sync state when editingRelationship opens
   useEffect(() => {
-    if (pendingConnection) {
+    if (editingRelationship) {
       setModalError(null);
-      setSourceId(pendingConnection.source || '');
-      setTargetId(pendingConnection.target || '');
-      setSourceHandle(pendingConnection.sourceHandle || undefined);
-      setTargetHandle(pendingConnection.targetHandle || undefined);
+      setIsSwapped(false);
+      setSourceId(editingRelationship.source_class_id);
+      setTargetId(editingRelationship.target_class_id);
+      setSourceHandle(editingRelationship.source_handle || undefined);
+      setTargetHandle(editingRelationship.target_handle || undefined);
 
-      let defaultType = activeRelationType || 'ONE_TO_MANY';
-      // Self-connection cannot be inheritance
-      if (pendingConnection.source === pendingConnection.target) {
-        if (defaultType === 'INHERITANCE' || defaultType === 'REALIZATION') {
-          defaultType = 'ONE_TO_MANY';
-        }
-        setSourceRole('subordinados');
-        setTargetRole('padre');
-        setSourceHandle('right-source');
-        setTargetHandle('bottom-target');
-      } else {
-        setSourceRole('');
-        setTargetRole('');
-      }
-
-      setSelectedType(defaultType);
-      const opt = RELATIONSHIP_OPTIONS.find((o) => o.id === defaultType) || RELATIONSHIP_OPTIONS[0];
-      setSourceCard(opt.defaultSourceCard);
-      setTargetCard(opt.defaultTargetCard);
-
-      setUseJunctionTable(defaultType === 'MANY_TO_MANY');
+      setSelectedType(editingRelationship.type);
+      setSourceCard(editingRelationship.source_cardinality || '1');
+      setTargetCard(editingRelationship.target_cardinality || '*');
+      setSourceRole(editingRelationship.source_role || '');
+      setTargetRole(editingRelationship.target_role || '');
     }
-  }, [pendingConnection, activeRelationType]);
+  }, [editingRelationship]);
 
-  if (!pendingConnection || !currentDocument) return null;
+  if (!editingRelationship || !currentDocument) return null;
 
   const sourceClass = currentDocument.classes.find((c) => c.id === sourceId);
   const targetClass = currentDocument.classes.find((c) => c.id === targetId);
@@ -200,6 +190,8 @@ export const RelationshipModal: React.FC = () => {
     const tmpRole = sourceRole;
     setSourceRole(targetRole);
     setTargetRole(tmpRole);
+
+    setIsSwapped(!isSwapped);
   };
 
   const handleSelectType = (option: RelationshipOption) => {
@@ -211,17 +203,12 @@ export const RelationshipModal: React.FC = () => {
     setSelectedType(option.id);
     setSourceCard(option.defaultSourceCard);
     setTargetCard(option.defaultTargetCard);
-    if (option.id === 'MANY_TO_MANY') {
-      setUseJunctionTable(true);
-      setJunctionTableName(`${sourceClass.name}_${targetClass.name}`.toLowerCase());
-    } else {
-      setUseJunctionTable(false);
-    }
   };
 
-  const handleCreate = async () => {
+  const handleSave = async () => {
     try {
       setModalError(null);
+
       if (isSelf && (selectedType === 'INHERITANCE' || selectedType === 'REALIZATION')) {
         setModalError('Una clase o tabla no puede heredar o implementar de sí misma.');
         return;
@@ -232,83 +219,55 @@ export const RelationshipModal: React.FC = () => {
         return;
       }
 
-      // 1. If N:M with junction table requested, create intermediate class first
-      if (selectedType === 'MANY_TO_MANY' && useJunctionTable) {
-        const jName = (junctionTableName.trim() || `${sourceClass.name}_${targetClass.name}`).toLowerCase();
-        const jClassId = `cls-${jName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+      // If direction was swapped, recreate relationship with new source and target
+      if (isSwapped) {
+        await dispatchCommand({
+          command_type: 'DELETE_RELATIONSHIP',
+          relationship_id: editingRelationship.id,
+        });
 
-        // Create junction class if not exists
-        const exists = currentDocument.classes.some((c) => c.name.toLowerCase() === jName.toLowerCase());
-        if (!exists) {
-          const midX = Math.round((sourceClass.position.x + targetClass.position.x) / 2);
-          const midY = Math.round((sourceClass.position.y + targetClass.position.y) / 2) + 120;
-          await dispatchCommand({
-            command_type: 'CREATE_CLASS',
-            class_id: jClassId,
-            name: jName,
-            position: { x: midX, y: midY },
-          });
-
-          // Add FK attributes
-          await dispatchCommand({
-            command_type: 'ADD_ATTRIBUTE',
-            class_id: jClassId,
-            name: `${sourceClass.name.toLowerCase()}_id`,
-            type: 'Long',
-            primary_key: false,
-            nullable: false,
-          });
-          await dispatchCommand({
-            command_type: 'ADD_ATTRIBUTE',
-            class_id: jClassId,
-            name: `${targetClass.name.toLowerCase()}_id`,
-            type: 'Long',
-            primary_key: false,
-            nullable: false,
-          });
-
-          // Connect source -> junction (1:N)
-          await dispatchCommand({
-            command_type: 'CREATE_RELATIONSHIP',
-            source_class_id: sourceClass.id,
-            target_class_id: jClassId,
-            type: 'ONE_TO_MANY',
-            source_cardinality: '1',
-            target_cardinality: '*',
-          });
-
-          // Connect target -> junction (1:N)
-          await dispatchCommand({
-            command_type: 'CREATE_RELATIONSHIP',
-            source_class_id: targetClass.id,
-            target_class_id: jClassId,
-            type: 'ONE_TO_MANY',
-            source_cardinality: '1',
-            target_cardinality: '*',
-          });
-
-          setPendingConnection(null);
-          return;
-        }
+        await dispatchCommand({
+          command_type: 'CREATE_RELATIONSHIP',
+          source_class_id: sourceId,
+          target_class_id: targetId,
+          source_handle: isSelf ? 'right-source' : sourceHandle,
+          target_handle: isSelf ? 'bottom-target' : targetHandle,
+          type: selectedType,
+          source_cardinality: isMultiplicityApplicable ? sourceCard || '1' : '',
+          target_cardinality: isMultiplicityApplicable ? targetCard || '1' : '',
+          source_role: sourceRole.trim() || undefined,
+          target_role: targetRole.trim() || undefined,
+        });
+      } else {
+        // Direct update
+        await dispatchCommand({
+          command_type: 'UPDATE_RELATIONSHIP',
+          relationship_id: editingRelationship.id,
+          type: selectedType,
+          source_cardinality: isMultiplicityApplicable ? sourceCard || '1' : '',
+          target_cardinality: isMultiplicityApplicable ? targetCard || '1' : '',
+          source_role: sourceRole.trim() || null,
+          target_role: targetRole.trim() || null,
+        });
       }
 
-      // 2. Standard direct relationship
-      await dispatchCommand({
-        command_type: 'CREATE_RELATIONSHIP',
-        source_class_id: sourceClass.id,
-        target_class_id: targetClass.id,
-        source_handle: isSelf ? 'right-source' : sourceHandle,
-        target_handle: isSelf ? 'bottom-target' : targetHandle,
-        type: selectedType,
-        source_cardinality: isMultiplicityApplicable ? sourceCard || '1' : '',
-        target_cardinality: isMultiplicityApplicable ? targetCard || '1' : '',
-        source_role: sourceRole.trim() || undefined,
-        target_role: targetRole.trim() || undefined,
-      });
-
-      setPendingConnection(null);
+      setEditingRelationship(null);
     } catch (err: any) {
-      setModalError(err?.message || 'Error al crear la relación. Verifica que no exista una relación idéntica.');
+      setModalError(err?.message || 'Error al guardar los cambios en la relación.');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (confirm(`¿Eliminar la relación entre ${sourceClass.name} y ${targetClass.name}?`)) {
+      try {
+        await dispatchCommand({
+          command_type: 'DELETE_RELATIONSHIP',
+          relationship_id: editingRelationship.id,
+        });
+        setEditingRelationship(null);
+      } catch (err: any) {
+        setModalError(err?.message || 'Error al eliminar la relación');
+      }
     }
   };
 
@@ -321,10 +280,10 @@ export const RelationshipModal: React.FC = () => {
             <div className="p-1.5 bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 rounded-lg">
               <GitCommit className="w-4 h-4" />
             </div>
-            <span>Configurar Relación de Base de Datos</span>
+            <span>Editar Relación</span>
           </div>
           <button
-            onClick={() => setPendingConnection(null)}
+            onClick={() => setEditingRelationship(null)}
             className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition"
           >
             <X className="w-4 h-4" />
@@ -333,7 +292,7 @@ export const RelationshipModal: React.FC = () => {
 
         {/* Content */}
         <div className="p-6 space-y-5 overflow-y-auto">
-          {/* Dynamic Visual Diagram Preview with SWAP Button */}
+          {/* Visual Diagram Preview with SWAP Button */}
           <div className="bg-slate-900 dark:bg-slate-950 text-white rounded-xl p-4 shadow-inner border border-slate-800">
             <div className="flex items-center justify-between gap-3 font-mono text-sm">
               {/* Source Node */}
@@ -382,7 +341,7 @@ export const RelationshipModal: React.FC = () => {
             </p>
           </div>
 
-          {/* Quick Relationship Grid (DB-first clean list) */}
+          {/* Quick Relationship Grid */}
           <div className="space-y-2">
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
               Tipo de Relación
@@ -417,45 +376,8 @@ export const RelationshipModal: React.FC = () => {
             </div>
           </div>
 
-          {/* Special Option: N:M Intermediate / Junction Table */}
-          {selectedType === 'MANY_TO_MANY' && (
-            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-xl space-y-2.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-semibold text-xs">
-                  <Table2 className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                  <span>Tabla Intermedia / Pivote (Junction Table)</span>
-                </div>
-                <input
-                  type="checkbox"
-                  id="junctionToggle"
-                  checked={useJunctionTable}
-                  onChange={(e) => setUseJunctionTable(e.target.checked)}
-                  className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                />
-              </div>
-
-              {useJunctionTable && (
-                <div>
-                  <label className="block text-[11px] font-medium text-amber-800 dark:text-amber-300 mb-1">
-                    Nombre de la tabla intermedia que se creará:
-                  </label>
-                  <input
-                    type="text"
-                    value={junctionTableName}
-                    onChange={(e) => setJunctionTableName(e.target.value)}
-                    placeholder={`${sourceClass.name}_${targetClass.name}`.toLowerCase()}
-                    className="w-full text-xs border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-lg p-2 font-mono focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  />
-                  <p className="text-[10px] text-amber-700 dark:text-amber-400 mt-1">
-                    Se creará la entidad intermedia automáticamente con las dos Claves Foráneas (FK) y dos relaciones 1:N en el diagrama.
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Multiplicity Configuration */}
-          {isMultiplicityApplicable && !useJunctionTable && (
+          {isMultiplicityApplicable && (
             <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 truncate">
@@ -530,24 +452,31 @@ export const RelationshipModal: React.FC = () => {
 
         {/* Actions */}
         <div className="flex items-center justify-between px-6 py-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-100 dark:border-slate-800">
-          <div className="text-[11px] text-slate-500 dark:text-slate-400">
-            {sourceClass.name} ➔ {targetClass.name}
-          </div>
+          <button
+            type="button"
+            onClick={handleDelete}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-red-600 hover:text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition"
+            title="Eliminar esta relación"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Eliminar Relación</span>
+          </button>
 
           <div className="flex items-center space-x-2">
             <button
               type="button"
-              onClick={() => setPendingConnection(null)}
+              onClick={() => setEditingRelationship(null)}
               className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition"
             >
               Cancelar
             </button>
             <button
               type="button"
-              onClick={handleCreate}
-              className="px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition"
+              onClick={handleSave}
+              className="flex items-center gap-1.5 px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition"
             >
-              Confirmar y Crear Relación
+              <Check className="w-4 h-4" />
+              <span>Guardar Cambios</span>
             </button>
           </div>
         </div>

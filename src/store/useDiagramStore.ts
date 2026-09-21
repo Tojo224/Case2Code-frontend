@@ -8,7 +8,7 @@ import {
   applyEdgeChanges,
   Connection,
 } from '@xyflow/react';
-import { CanonicalUmlDocument, UmlClass, UmlCommand, RelationshipType } from '../types/uml';
+import { CanonicalUmlDocument, UmlClass, UmlCommand, RelationshipType, UmlRelationship } from '../types/uml';
 import { api } from '../services/api';
 import { collaborationWs } from '../services/websocket';
 import { useCollaborationStore } from './useCollaborationStore';
@@ -25,7 +25,9 @@ interface DiagramState {
   // Selected elements for inspectors/modals
   selectedClass: UmlClass | null;
   pendingConnection: Connection | null;
+  editingRelationship: UmlRelationship | null;
   activeRelationType: RelationshipType | null;
+  junctionConfig: { auto: boolean; name: string };
 
   // Actions
   fetchDiagrams: () => Promise<void>;
@@ -42,6 +44,8 @@ interface DiagramState {
 
   setSelectedClass: (cls: UmlClass | null) => void;
   setPendingConnection: (conn: Connection | null) => void;
+  setEditingRelationship: (rel: UmlRelationship | null) => void;
+  setJunctionConfig: (config: { auto: boolean; name: string }) => void;
   clearError: () => void;
   generateBackend: (verify?: boolean) => Promise<void>;
 
@@ -86,7 +90,9 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
   error: null,
   selectedClass: null,
   pendingConnection: null,
+  editingRelationship: null,
   activeRelationType: null,
+  junctionConfig: { auto: true, name: '' },
 
   fetchDiagrams: async () => {
     try {
@@ -193,23 +199,164 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
     }).catch(() => {});
   },
 
-  onConnect: (connection) => {
-    if (connection.source && connection.target) {
-      let finalConn = connection;
-      if (connection.source === connection.target) {
-        finalConn = {
-          ...connection,
-          sourceHandle: 'right-source',
-          targetHandle: 'bottom-target',
-        };
+  onConnect: async (connection) => {
+    const { activeRelationType, currentDocument, dispatchCommand, junctionConfig } = get();
+
+    // 1. If in pointer mode (no relation tool selected in sidebar), do nothing!
+    if (!activeRelationType) {
+      return;
+    }
+
+    if (!connection.source || !connection.target || !currentDocument) {
+      return;
+    }
+
+    const sourceClass = currentDocument.classes.find((c) => c.id === connection.source);
+    const targetClass = currentDocument.classes.find((c) => c.id === connection.target);
+    if (!sourceClass || !targetClass) {
+      return;
+    }
+
+    const isSelf = connection.source === connection.target;
+
+    // 2. Validation: inheritance/realization cannot be recursive
+    if (isSelf && (activeRelationType === 'INHERITANCE' || activeRelationType === 'REALIZATION')) {
+      set({ error: 'Una clase no puede heredar o implementar de sí misma.' });
+      return;
+    }
+
+    // Handles:
+    const sourceHandle = isSelf ? 'right-source' : connection.sourceHandle || undefined;
+    const targetHandle = isSelf ? 'bottom-target' : connection.targetHandle || undefined;
+
+    // 3. Handle MANY_TO_MANY with junction table
+    if (activeRelationType === 'MANY_TO_MANY' && junctionConfig.auto) {
+      const jName = (junctionConfig.name.trim() || `${sourceClass.name}_${targetClass.name}`).toLowerCase();
+      const jClassId = `cls-${jName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+      try {
+        const exists = currentDocument.classes.some((c) => c.name.toLowerCase() === jName.toLowerCase());
+        if (!exists) {
+          const midX = Math.round((sourceClass.position.x + targetClass.position.x) / 2);
+          const midY = Math.round((sourceClass.position.y + targetClass.position.y) / 2) + 120;
+          await dispatchCommand({
+            command_type: 'CREATE_CLASS',
+            class_id: jClassId,
+            name: jName,
+            position: { x: midX, y: midY },
+          });
+
+          // Add FK attributes
+          await dispatchCommand({
+            command_type: 'ADD_ATTRIBUTE',
+            class_id: jClassId,
+            name: `${sourceClass.name.toLowerCase()}_id`,
+            type: 'Long',
+            primary_key: false,
+            nullable: false,
+          });
+          await dispatchCommand({
+            command_type: 'ADD_ATTRIBUTE',
+            class_id: jClassId,
+            name: `${targetClass.name.toLowerCase()}_id`,
+            type: 'Long',
+            primary_key: false,
+            nullable: false,
+          });
+
+          // Connect source -> junction (1:N)
+          await dispatchCommand({
+            command_type: 'CREATE_RELATIONSHIP',
+            source_class_id: sourceClass.id,
+            target_class_id: jClassId,
+            type: 'ONE_TO_MANY',
+            source_cardinality: '1',
+            target_cardinality: '*',
+          });
+
+          // Connect target -> junction (1:N)
+          await dispatchCommand({
+            command_type: 'CREATE_RELATIONSHIP',
+            source_class_id: targetClass.id,
+            target_class_id: jClassId,
+            type: 'ONE_TO_MANY',
+            source_cardinality: '1',
+            target_cardinality: '*',
+          });
+
+          return;
+        }
+      } catch (err: any) {
+        set({ error: err?.message || 'Error al crear tabla intermedia' });
+        return;
       }
-      set({ pendingConnection: finalConn });
+    }
+
+    // 4. Default cardinalities and roles
+    let sourceCard = '1';
+    let targetCard = '1';
+    let sourceRole: string | undefined = undefined;
+    let targetRole: string | undefined = undefined;
+
+    switch (activeRelationType) {
+      case 'ONE_TO_MANY':
+        sourceCard = '1';
+        targetCard = '*';
+        break;
+      case 'MANY_TO_ONE':
+        sourceCard = '*';
+        targetCard = '1';
+        break;
+      case 'ONE_TO_ONE':
+        sourceCard = '1';
+        targetCard = '1';
+        break;
+      case 'MANY_TO_MANY':
+        sourceCard = '*';
+        targetCard = '*';
+        break;
+      case 'COMPOSITION':
+      case 'AGGREGATION':
+        sourceCard = '1';
+        targetCard = '*';
+        break;
+      case 'INHERITANCE':
+      case 'REALIZATION':
+      case 'DEPENDENCY':
+        sourceCard = '';
+        targetCard = '';
+        break;
+    }
+
+    if (isSelf) {
+      sourceRole = 'subordinados';
+      targetRole = 'padre';
+    }
+
+    // 5. Dispatch instant relationship creation
+    try {
+      await dispatchCommand({
+        command_type: 'CREATE_RELATIONSHIP',
+        source_class_id: sourceClass.id,
+        target_class_id: targetClass.id,
+        source_handle: sourceHandle,
+        target_handle: targetHandle,
+        type: activeRelationType,
+        source_cardinality: sourceCard,
+        target_cardinality: targetCard,
+        source_role: sourceRole,
+        target_role: targetRole,
+      });
+    } catch (err: any) {
+      set({ error: err?.message || 'Error al crear la relación' });
     }
   },
 
   setActiveRelationType: (type) => set({ activeRelationType: type }),
   setSelectedClass: (cls) => set({ selectedClass: cls }),
   setPendingConnection: (conn) => set({ pendingConnection: conn }),
+  setEditingRelationship: (rel) => set({ editingRelationship: rel }),
+  setJunctionConfig: (config) => set({ junctionConfig: config }),
   clearError: () => set({ error: null }),
 
   generateBackend: async (verify = false) => {
@@ -280,6 +427,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       edges: [],
       selectedClass: null,
       pendingConnection: null,
+      editingRelationship: null,
       activeRelationType: null,
     });
   },
