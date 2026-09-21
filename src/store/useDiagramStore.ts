@@ -348,7 +348,14 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
         target_role: targetRole,
       });
     } catch (err: any) {
-      set({ error: err?.message || 'Error al crear la relación' });
+      const msg = err?.message || '';
+      if (msg.includes('already exists')) {
+        set({
+          error: `Ya existe una relación idéntica entre "${sourceClass.name}" y "${targetClass.name}". Para crear otra, asignales roles distintos con doble clic.`,
+        });
+      } else {
+        set({ error: msg || 'Error al crear la relación' });
+      }
     }
   },
 

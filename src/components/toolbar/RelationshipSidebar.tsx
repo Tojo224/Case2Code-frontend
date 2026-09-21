@@ -104,7 +104,13 @@ const TOOLS: SidebarTool[] = [
 
 export const RelationshipSidebar: React.FC = () => {
   const { activeRelationType, setActiveRelationType, junctionConfig, setJunctionConfig } = useDiagramStore();
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  // Auto-collapse on small screens (< 1024px)
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 1024;
+    }
+    return false;
+  });
   const [hoveredTool, setHoveredTool] = useState<SidebarTool | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ top: number }>({ top: 0 });
 
@@ -118,6 +124,17 @@ export const RelationshipSidebar: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeRelationType, setActiveRelationType]);
+
+  // Auto-collapse if resized to mobile
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 768) {
+        setIsCollapsed(true);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleMouseEnter = (tool: SidebarTool, e: React.MouseEvent<HTMLButtonElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();

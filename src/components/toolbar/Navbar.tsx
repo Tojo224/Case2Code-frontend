@@ -48,23 +48,23 @@ export const Navbar: React.FC = () => {
     <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm z-30 relative transition-colors">
       <div className="flex items-center justify-between px-4 h-14">
         {/* Brand & Project Info */}
-        <div className="flex items-center space-x-3">
-          <div className="bg-sky-600 dark:bg-sky-500 text-white p-1.5 rounded-lg shadow-sm">
+        <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
+          <div className="bg-sky-600 dark:bg-sky-500 text-white p-1.5 rounded-lg shadow-sm shrink-0">
             <Code2 className="w-5 h-5" />
           </div>
-          <div>
+          <div className="hidden sm:block">
             <span className="font-extrabold text-slate-800 dark:text-slate-100 text-base tracking-tight">Case2Code</span>
             <span className="text-[11px] text-slate-400 dark:text-slate-500 block -mt-1 font-medium">UML CASE Modeler</span>
           </div>
 
-          <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 mx-2" />
+          <div className="hidden md:block h-6 w-px bg-slate-200 dark:bg-slate-800 mx-1 sm:mx-2" />
 
           {/* Diagram Selector */}
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-1 sm:space-x-2 min-w-0">
             <select
               value={currentDocument?.id || ''}
               onChange={(e) => loadDiagram(e.target.value)}
-              className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-2.5 py-1.5 font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/80 transition focus:outline-none focus:ring-1 focus:ring-sky-500"
+              className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1.5 font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/80 transition focus:outline-none focus:ring-1 focus:ring-sky-500 max-w-[110px] sm:max-w-[180px] md:max-w-[220px] truncate"
             >
               {diagramsList.map((d) => (
                 <option key={d.id} value={d.id} className="dark:bg-slate-800 dark:text-slate-100">
@@ -76,7 +76,7 @@ export const Navbar: React.FC = () => {
             <button
               onClick={() => setIsCreatingDiag(true)}
               title="Create new diagram"
-              className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition"
+              className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition shrink-0"
             >
               <FolderPlus className="w-4 h-4" />
             </button>
@@ -84,46 +84,49 @@ export const Navbar: React.FC = () => {
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center space-x-2.5">
+        <div className="flex items-center space-x-1.5 sm:space-x-2.5 shrink-0">
           <button
             onClick={handleAddClass}
-            className="flex items-center space-x-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white text-xs font-semibold px-3 py-1.5 rounded-md shadow-sm transition"
+            title="Agregar Clase"
+            className="flex items-center space-x-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-md shadow-sm transition"
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Add Class</span>
+            <Plus className="w-3.5 h-3.5 shrink-0" />
+            <span className="hidden md:inline">Clase</span>
           </button>
 
           <button
             onClick={toggleAssistant}
-            className={`flex items-center space-x-1.5 text-xs font-semibold px-3 py-1.5 rounded-md shadow-sm transition border ${
+            title="Asistente CASE IA"
+            className={`flex items-center space-x-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-md shadow-sm transition border ${
               isAssistantOpen
                 ? 'bg-sky-600 text-white border-sky-500 hover:bg-sky-700'
                 : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750'
             }`}
           >
-            <Bot className={`w-3.5 h-3.5 ${isAssistantOpen ? 'text-white' : 'text-sky-600 dark:text-sky-400'}`} />
-            <span>Asistente CASE</span>
+            <Bot className={`w-3.5 h-3.5 shrink-0 ${isAssistantOpen ? 'text-white' : 'text-sky-600 dark:text-sky-400'}`} />
+            <span className="hidden lg:inline">Asistente CASE</span>
           </button>
 
           <button
             onClick={() => generateBackend(false)}
             disabled={isGenerating || !currentDocument || currentDocument.classes.length === 0}
-            className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold px-3.5 py-1.5 rounded-md shadow-sm transition"
+            title="Generar Backend Spring Boot"
+            className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold px-2.5 sm:px-3.5 py-1.5 rounded-md shadow-sm transition"
           >
             {isGenerating ? (
-              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
             ) : (
-              <Download className="w-3.5 h-3.5" />
+              <Download className="w-3.5 h-3.5 shrink-0" />
             )}
-            <span>{isGenerating ? 'Generating...' : 'Generate Spring Boot'}</span>
+            <span className="hidden sm:inline">{isGenerating ? 'Generando...' : 'Spring Boot'}</span>
           </button>
 
-          <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 mx-1" />
+          <div className="hidden sm:block h-6 w-px bg-slate-200 dark:bg-slate-800 mx-0.5" />
 
           {/* Real-Time Collaborators Presence */}
           <CollaboratorAvatars />
 
-          <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 mx-1" />
+          <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 mx-0.5" />
 
           {/* Dark / Light Theme Toggle (Sun / Moon) */}
           <ThemeToggle />

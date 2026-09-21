@@ -151,7 +151,7 @@ export const CaseAssistantChat: React.FC = () => {
   if (!isAssistantOpen) return null;
 
   return (
-    <aside className="fixed right-4 top-16 bottom-4 w-96 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-2xl flex flex-col z-40 overflow-hidden animate-in slide-in-from-right duration-200 transition-colors">
+    <aside className="fixed right-0 sm:right-4 top-14 sm:top-16 bottom-0 sm:bottom-4 w-full sm:w-96 max-w-full bg-white dark:bg-slate-900 border-l sm:border border-slate-200/90 dark:border-slate-800 rounded-none sm:rounded-2xl shadow-2xl flex flex-col z-40 overflow-hidden animate-in slide-in-from-right duration-200 transition-colors">
       {/* Header */}
       <div className="bg-slate-900 dark:bg-slate-950 text-white px-4 py-3 flex items-center justify-between border-b border-slate-800">
         <div className="flex items-center space-x-2.5">
