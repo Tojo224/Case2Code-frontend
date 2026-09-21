@@ -102,8 +102,14 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       set({ isLoading: true, error: null });
       const list = await api.listDiagrams();
       set({ diagramsList: list, isLoading: false });
-      if (list.length > 0 && !get().currentDocument) {
-        await get().loadDiagram(list[0].id);
+      if (list.length > 0) {
+        const currentDoc = get().currentDocument;
+        if (!currentDoc || !list.some((d) => d.id === currentDoc.id)) {
+          await get().loadDiagram(list[0].id);
+        }
+      } else {
+        // User has no diagrams: clear canvas completely
+        get().resetDiagrams();
       }
     } catch (e: any) {
       set({ error: e.message, isLoading: false });

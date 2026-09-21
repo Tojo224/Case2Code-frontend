@@ -2,15 +2,12 @@ import React, { useState } from 'react';
 import { Check, Copy, Trash2, UserPlus, Users, X } from 'lucide-react';
 import { useCollaborationStore } from '../../store/useCollaborationStore';
 import { useDiagramStore } from '../../store/useDiagramStore';
-import { useAuthStore } from '../../store/useAuthStore';
 import { api } from '../../services/api';
 
 export const InviteModal: React.FC = () => {
   const { isInviteModalOpen, setInviteModalOpen, collaborators, setCollaborators } =
     useCollaborationStore();
   const currentDoc = useDiagramStore((s) => s.currentDocument);
-  const demoUsers = useAuthStore((s) => s.demoUsers);
-  const currentUser = useAuthStore((s) => s.currentUser);
 
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'EDITOR' | 'VIEWER'>('EDITOR');
@@ -51,13 +48,6 @@ export const InviteModal: React.FC = () => {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
-
-  // Demo users not yet in this project
-  const availableDemoUsers = demoUsers.filter(
-    (d) =>
-      d.user.id !== currentUser?.id &&
-      !collaborators.some((c) => c.user_email === d.user.email || c.user_id === d.user.id)
-  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-fade-in transition-colors">
@@ -116,32 +106,6 @@ export const InviteModal: React.FC = () => {
             </div>
             {error && <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{error}</p>}
           </div>
-
-          {/* Quick Add Demo Users */}
-          {availableDemoUsers.length > 0 && (
-            <div className="p-3.5 bg-indigo-50/60 dark:bg-indigo-950/40 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
-              <span className="block text-[11px] font-bold text-indigo-900 dark:text-indigo-300 uppercase tracking-wide mb-2">
-                Sugerencias Rápidas para Pruebas (1-Clic)
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {availableDemoUsers.map((d) => (
-                  <button
-                    key={d.user.id}
-                    onClick={() => handleInvite(d.user.email, 'EDITOR')}
-                    disabled={isSubmitting}
-                    className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-white dark:bg-slate-800 hover:bg-indigo-100 dark:hover:bg-slate-700 border border-indigo-200 dark:border-slate-700 text-indigo-800 dark:text-indigo-200 rounded-lg font-medium transition-colors shadow-2xs"
-                  >
-                    <span
-                      style={{ backgroundColor: d.user.avatar_color }}
-                      className="w-2 h-2 rounded-full"
-                    />
-                    <span>{d.user.name}</span>
-                    <span className="text-[10px] text-indigo-400 font-normal">+ Agregar</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* Existing Collaborators List */}
           <div>

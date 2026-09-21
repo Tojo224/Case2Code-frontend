@@ -4,12 +4,10 @@ import { AuthResponse, User } from '../types/collaboration';
 interface AuthState {
   currentUser: User | null;
   token: string | null;
-  demoUsers: AuthResponse[];
   isLoading: boolean;
   error: string | null;
 
   loadSession: () => Promise<void>;
-  switchUser: (auth: AuthResponse) => void;
   login: (email: string, password: string) => Promise<boolean>;
   register: (name: string, email: string, password: string, avatarColor?: string) => Promise<boolean>;
   forgotPassword: (email: string) => Promise<{ ok: boolean; message: string; devToken?: string }>;
@@ -24,7 +22,6 @@ const STORAGE_KEY_USER = 'case2code_user';
 export const useAuthStore = create<AuthState>((set) => ({
   currentUser: null,
   token: null,
-  demoUsers: [],
   isLoading: false,
   error: null,
 
@@ -33,20 +30,26 @@ export const useAuthStore = create<AuthState>((set) => ({
   loadSession: async () => {
     set({ isLoading: true, error: null });
     try {
-      // 1. Fetch available demo users from backend
-      const res = await fetch('/api/auth/demo-users');
-      let demos: AuthResponse[] = [];
-      if (res.ok) {
-        demos = await res.json();
-        set({ demoUsers: demos });
-      }
-
-      // 2. Check localStorage for existing session and verify token with /api/auth/me
       const savedToken = localStorage.getItem(STORAGE_KEY_TOKEN);
       const savedUserStr = localStorage.getItem(STORAGE_KEY_USER);
 
       if (savedToken && savedUserStr) {
         try {
+          const parsedUser = JSON.parse(savedUserStr);
+          // Purge any legacy demo account sessions (Juan, Maria, Pedro, Sofia)
+          if (
+            parsedUser.email?.endsWith('@case2code.io') ||
+            parsedUser.id?.startsWith('usr-juan') ||
+            parsedUser.id?.startsWith('usr-maria') ||
+            parsedUser.id?.startsWith('usr-pedro') ||
+            parsedUser.id?.startsWith('usr-sofia')
+          ) {
+            localStorage.removeItem(STORAGE_KEY_TOKEN);
+            localStorage.removeItem(STORAGE_KEY_USER);
+            set({ currentUser: null, token: null, isLoading: false });
+            return;
+          }
+
           const meRes = await fetch('/api/auth/me', {
             headers: { Authorization: `Bearer ${savedToken}` },
           });
@@ -61,11 +64,13 @@ export const useAuthStore = create<AuthState>((set) => ({
             localStorage.removeItem(STORAGE_KEY_USER);
           }
         } catch {
-          // Network error or server unavailable during check: fallback to stored user
+          // Network error: fallback to stored user if not demo
           try {
             const user = JSON.parse(savedUserStr);
-            set({ currentUser: user, token: savedToken, isLoading: false });
-            return;
+            if (!user.email?.endsWith('@case2code.io')) {
+              set({ currentUser: user, token: savedToken, isLoading: false });
+              return;
+            }
           } catch {
             localStorage.removeItem(STORAGE_KEY_TOKEN);
             localStorage.removeItem(STORAGE_KEY_USER);
@@ -73,17 +78,10 @@ export const useAuthStore = create<AuthState>((set) => ({
         }
       }
 
-      // 3. If no valid session, set logged out
       set({ currentUser: null, token: null, isLoading: false });
     } catch (err: any) {
       set({ error: err.message, isLoading: false });
     }
-  },
-
-  switchUser: (auth: AuthResponse) => {
-    localStorage.setItem(STORAGE_KEY_TOKEN, auth.access_token);
-    localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(auth.user));
-    set({ currentUser: auth.user, token: auth.access_token, error: null });
   },
 
   login: async (email: string, password: string) => {
