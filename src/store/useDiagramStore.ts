@@ -52,7 +52,10 @@ interface DiagramState {
   // AI Assistant
   isAssistantOpen: boolean;
   toggleAssistant: () => void;
-  sendAssistantPrompt: (prompt: string) => Promise<any>;
+  sendAssistantPrompt: (
+    prompt: string,
+    imageData?: { base64: string; mimeType: string }
+  ) => Promise<any>;
 
   // Real-Time Collaboration
   applyRemoteDocument: (doc: CanonicalUmlDocument) => void;
@@ -382,13 +385,13 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
   isAssistantOpen: false,
   toggleAssistant: () => set((state) => ({ isAssistantOpen: !state.isAssistantOpen })),
 
-  sendAssistantPrompt: async (prompt: string) => {
+  sendAssistantPrompt: async (prompt: string, imageData?: { base64: string; mimeType: string }) => {
     const doc = get().currentDocument;
     if (!doc) throw new Error('No diagram loaded');
 
     try {
       set({ error: null });
-      const res = await api.sendAssistantPrompt(doc.id, prompt);
+      const res = await api.sendAssistantPrompt(doc.id, prompt, imageData);
       if (res.executed_commands && res.executed_commands.length > 0) {
         const { nodes, edges } = documentToElements(res.document);
         set({

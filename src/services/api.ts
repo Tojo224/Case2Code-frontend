@@ -81,11 +81,21 @@ export const api = {
     window.URL.revokeObjectURL(downloadUrl);
   },
 
-  async sendAssistantPrompt(diagramId: string, prompt: string): Promise<AssistantPromptResponse> {
+  async sendAssistantPrompt(
+    diagramId: string,
+    prompt: string,
+    imageData?: { base64: string; mimeType: string }
+  ): Promise<AssistantPromptResponse> {
+    const payload: Record<string, any> = { prompt };
+    if (imageData) {
+      payload.image_base64 = imageData.base64;
+      payload.image_mime_type = imageData.mimeType;
+    }
+
     const res = await fetch(`${BASE_URL}/diagrams/${diagramId}/assistant`, {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: 'Assistant request failed' }));
