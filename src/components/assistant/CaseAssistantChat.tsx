@@ -205,8 +205,8 @@ export const CaseAssistantChat: React.FC = () => {
   };
 
   const quickPrompts = [
-    'Crea la clase Cliente con id y nombre',
-    'Crea la clase Reserva con id y fecha',
+    'Cliente (id, nombre, email), Pedido (id, fecha, total, cliente_id)',
+    'Base de datos de tienda: Producto, Categoria, Cliente, Pedido',
     'Relaciona Cliente con Reserva 1 a N',
     'Agrega atributo telefono a Cliente',
   ];
@@ -406,7 +406,7 @@ export const CaseAssistantChat: React.FC = () => {
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
               disabled={isLoading}
-              placeholder={attachedImage ? 'Instrucción opcional (Enter para enviar)...' : 'Escribe, habla o pega un boceto (Ctrl+V)...'}
+              placeholder={attachedImage ? 'Instrucción opcional (Enter para replicar base de datos)...' : 'Escribe, pega un esquema/SQL o sube un boceto (Ctrl+V)...'}
               className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:text-slate-100 rounded-xl px-3 py-2.5 pr-9 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white dark:focus:bg-slate-750 transition"
             />
             {speechSupported && (
