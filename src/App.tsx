@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useDiagramStore } from './store/useDiagramStore';
 import { useAuthStore } from './store/useAuthStore';
+import { useThemeStore } from './store/useThemeStore';
 import { Navbar } from './components/toolbar/Navbar';
 import { DiagramCanvas } from './components/canvas/DiagramCanvas';
 import { CaseAssistantChat } from './components/assistant/CaseAssistantChat';
@@ -10,8 +11,12 @@ import { AuthModal } from './components/auth/AuthModal';
 export const App: React.FC = () => {
   const { fetchDiagrams, currentDocument, createDiagram, isLoading } = useDiagramStore();
   const { loadSession } = useAuthStore();
+  const { initTheme } = useThemeStore();
 
   useEffect(() => {
+    // 0. Initialize theme (dark / light mode)
+    initTheme();
+
     const init = async () => {
       // 1. Initialize user session and seed demo users
       await loadSession();
@@ -26,10 +31,10 @@ export const App: React.FC = () => {
     };
 
     init();
-  }, [loadSession, fetchDiagrams, createDiagram]);
+  }, [initTheme, loadSession, fetchDiagrams, createDiagram]);
 
   return (
-    <div className="w-screen h-screen flex flex-col overflow-hidden bg-slate-100">
+    <div className="w-screen h-screen flex flex-col overflow-hidden bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
       <Navbar />
       <main className="flex-1 relative">
         {isLoading && !currentDocument ? (

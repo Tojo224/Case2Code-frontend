@@ -134,3 +134,4 @@ class CollaborationClient {
 }
 
 export const collaborationWs = new CollaborationClient();
+

@@ -51,7 +51,7 @@ export const UserMenu: React.FC = () => {
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 pl-1.5 pr-2.5 py-1 rounded-full bg-slate-100 hover:bg-slate-200/80 border border-slate-200 transition-colors shadow-2xs"
+        className="flex items-center gap-2 pl-1.5 pr-2.5 py-1 rounded-full bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-colors shadow-2xs"
         title="Perfil y conmutador de usuarios"
       >
         <div
@@ -60,23 +60,23 @@ export const UserMenu: React.FC = () => {
         >
           {(currentUser.name || 'U').slice(0, 2).toUpperCase()}
         </div>
-        <span className="text-xs font-semibold text-slate-700 max-w-[110px] truncate">
+        <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 max-w-[110px] truncate">
           {currentUser.name}
         </span>
-        <ChevronDown className="w-3 h-3 text-slate-400" />
+        <ChevronDown className="w-3 h-3 text-slate-400 dark:text-slate-500" />
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-50 animate-fade-in">
+        <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 py-2 z-50 animate-fade-in transition-colors">
           {/* Active User Info */}
-          <div className="px-4 py-2 border-b border-slate-100">
-            <p className="text-xs font-bold text-slate-800">{currentUser.name}</p>
-            <p className="text-[11px] text-slate-400 truncate">{currentUser.email}</p>
+          <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800">
+            <p className="text-xs font-bold text-slate-800 dark:text-slate-100">{currentUser.name}</p>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate">{currentUser.email}</p>
           </div>
 
           {/* Quick Demo Switcher Section */}
-          <div className="py-2 border-b border-slate-100">
-            <div className="flex items-center gap-1 px-4 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+          <div className="py-2 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-1 px-4 py-1 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
               <Sparkles className="w-3 h-3 text-amber-500" />
               <span>Conmutador Rápido (Demo)</span>
             </div>
@@ -87,19 +87,21 @@ export const UserMenu: React.FC = () => {
                   key={d.user.id}
                   onClick={() => handleSwitchUser(d)}
                   className={`w-full flex items-center justify-between px-4 py-2 text-left text-xs transition-colors ${
-                    isSelected ? 'bg-indigo-50 font-semibold text-indigo-900' : 'hover:bg-slate-50 text-slate-700'
+                    isSelected
+                      ? 'bg-indigo-50 dark:bg-indigo-950/60 font-semibold text-indigo-900 dark:text-indigo-200'
+                      : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200'
                   }`}
                 >
                   <div className="flex items-center gap-2">
                     <span
                       style={{ backgroundColor: d.user.avatar_color }}
-                      className="w-2.5 h-2.5 rounded-full ring-1 ring-slate-300"
+                      className="w-2.5 h-2.5 rounded-full ring-1 ring-slate-300 dark:ring-slate-600"
                     />
                     <div className="truncate">
                       <p className="truncate text-xs">{d.user.name}</p>
                     </div>
                   </div>
-                  {isSelected && <UserCheck className="w-3.5 h-3.5 text-indigo-600 shrink-0" />}
+                  {isSelected && <UserCheck className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />}
                 </button>
               );
             })}
@@ -112,14 +114,14 @@ export const UserMenu: React.FC = () => {
                 setIsOpen(false);
                 setAuthModalOpen(true);
               }}
-              className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 transition-colors"
+              className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
             >
-              <LogIn className="w-3.5 h-3.5 text-slate-400" />
+              <LogIn className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
               <span>Crear otra cuenta / Login manual</span>
             </button>
             <button
               onClick={handleLogout}
-              className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs text-red-600 hover:bg-red-50 transition-colors"
+              className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
             >
               <LogOut className="w-3.5 h-3.5" />
               <span>Cerrar Sesión</span>
@@ -130,3 +132,4 @@ export const UserMenu: React.FC = () => {
     </div>
   );
 };
+

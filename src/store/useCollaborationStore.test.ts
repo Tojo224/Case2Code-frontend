@@ -93,3 +93,4 @@ describe('useCollaborationStore and Real-Time Multi-user Sync', () => {
     expect(diagramState.nodes[0].data.name).toBe('Pago');
   });
 });
+
