@@ -28,9 +28,9 @@ export const App: React.FC = () => {
         // 2. Fetch accessible diagrams for active user
         await fetchDiagrams();
 
-        // 3. If no diagrams exist, create a starter diagram
+        // 3. If no diagrams exist, create a starter diagram owned by the user
         if (!useDiagramStore.getState().currentDocument && useDiagramStore.getState().diagramsList.length === 0) {
-          await createDiagram('Peluqueria', 'Diagrama de clases para examen');
+          await createDiagram('Mi Primer Diagrama', 'Proyecto de modelado UML');
         }
       } else {
         // Prompt login if no active user session
