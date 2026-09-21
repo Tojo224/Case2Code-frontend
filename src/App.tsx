@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useDiagramStore } from './store/useDiagramStore';
 import { useAuthStore } from './store/useAuthStore';
+import { useCollaborationStore } from './store/useCollaborationStore';
 import { useThemeStore } from './store/useThemeStore';
 import { Navbar } from './components/toolbar/Navbar';
 import { DiagramCanvas } from './components/canvas/DiagramCanvas';
@@ -21,12 +22,18 @@ export const App: React.FC = () => {
       // 1. Initialize user session and seed demo users
       await loadSession();
 
-      // 2. Fetch accessible diagrams for active user
-      await fetchDiagrams();
+      const user = useAuthStore.getState().currentUser;
+      if (user) {
+        // 2. Fetch accessible diagrams for active user
+        await fetchDiagrams();
 
-      // 3. If no diagrams exist, create a starter diagram
-      if (!useDiagramStore.getState().currentDocument && useDiagramStore.getState().diagramsList.length === 0) {
-        await createDiagram('Peluqueria', 'Diagrama de clases para examen');
+        // 3. If no diagrams exist, create a starter diagram
+        if (!useDiagramStore.getState().currentDocument && useDiagramStore.getState().diagramsList.length === 0) {
+          await createDiagram('Peluqueria', 'Diagrama de clases para examen');
+        }
+      } else {
+        // Prompt login if no active user session
+        useCollaborationStore.getState().setAuthModalOpen(true);
       }
     };
 

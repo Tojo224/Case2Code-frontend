@@ -29,10 +29,11 @@ export const UserMenu: React.FC = () => {
     await fetchDiagrams();
   };
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     logout();
     setIsOpen(false);
-    await fetchDiagrams();
+    useDiagramStore.getState().resetDiagrams();
+    setAuthModalOpen(true);
   };
 
   if (!currentUser) {

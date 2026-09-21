@@ -50,19 +50,8 @@ export const useAuthStore = create<AuthState>((set) => ({
         }
       }
 
-      // 3. Default to first demo user (Profesor) if available
-      if (demos.length > 0) {
-        const defaultUser = demos[0];
-        localStorage.setItem(STORAGE_KEY_TOKEN, defaultUser.access_token);
-        localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(defaultUser.user));
-        set({
-          currentUser: defaultUser.user,
-          token: defaultUser.access_token,
-          isLoading: false,
-        });
-      } else {
-        set({ isLoading: false });
-      }
+      // 3. If no session stored, remain logged out
+      set({ currentUser: null, token: null, isLoading: false });
     } catch (err: any) {
       set({ error: err.message, isLoading: false });
     }

@@ -46,9 +46,9 @@ export const DiagramCanvas: React.FC = () => {
       >
         <Background
           variant={BackgroundVariant.Dots}
-          gap={16}
-          size={1}
-          color={isDark ? '#334155' : '#cbd5e1'}
+          gap={18}
+          size={1.5}
+          color={isDark ? '#475569' : '#0f172a'}
         />
         <Controls className="!bg-white dark:!bg-slate-800 !border-slate-200 dark:!border-slate-700 !shadow-md !rounded-lg dark:[&>button]:!bg-slate-800 dark:[&>button]:!border-slate-700 dark:[&>button]:!fill-slate-200" />
         <MiniMap

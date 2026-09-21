@@ -50,6 +50,7 @@ interface DiagramState {
 
   // Real-Time Collaboration
   applyRemoteDocument: (doc: CanonicalUmlDocument) => void;
+  resetDiagrams: () => void;
 }
 
 function documentToElements(doc: CanonicalUmlDocument): { nodes: Node[]; edges: Edge[] } {
@@ -254,6 +255,19 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       nodes,
       edges,
       selectedClass: updatedSelected,
+    });
+  },
+
+  resetDiagrams: () => {
+    collaborationWs.disconnect();
+    useCollaborationStore.getState().clearState();
+    set({
+      currentDocument: null,
+      diagramsList: [],
+      nodes: [],
+      edges: [],
+      selectedClass: null,
+      pendingConnection: null,
     });
   },
 }));
