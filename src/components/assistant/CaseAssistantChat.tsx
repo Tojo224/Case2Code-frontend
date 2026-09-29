@@ -51,6 +51,8 @@ export const CaseAssistantChat: React.FC = () => {
     },
   ]);
 
+  const handleSendMessageRef = useRef<(text?: string) => Promise<void>>(async () => {});
+
   // Initialize Speech Recognition
   useEffect(() => {
     const SpeechRecognition =
@@ -68,9 +70,12 @@ export const CaseAssistantChat: React.FC = () => {
       };
 
       recognition.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        setInputPrompt(transcript);
+        const transcript = event.results[0][0]?.transcript;
         setIsListening(false);
+        if (transcript && transcript.trim()) {
+          setInputPrompt(transcript);
+          handleSendMessageRef.current(transcript);
+        }
       };
 
       recognition.onerror = () => {
@@ -196,6 +201,10 @@ export const CaseAssistantChat: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    handleSendMessageRef.current = handleSendMessage;
+  }, [handleSendMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
