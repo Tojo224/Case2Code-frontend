@@ -4,7 +4,7 @@ import {
   CommandExecutionResponse,
   UmlCommand,
 } from '../types/uml';
-import { ProjectCollaborator } from '../types/collaboration';
+import { ChatHistoryResponse, ProjectCollaborator } from '../types/collaboration';
 
 const BASE_URL = '/api';
 
@@ -202,5 +202,13 @@ export const api = {
       headers: getAuthHeaders(),
     });
     if (!res.ok) throw new Error('Failed to remove collaborator');
+  },
+
+  async getChatHistory(diagramId: string): Promise<ChatHistoryResponse> {
+    const res = await fetch(`${BASE_URL}/diagrams/${diagramId}/chat`, {
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error('Failed to fetch chat history');
+    return res.json();
   },
 };

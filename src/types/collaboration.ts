@@ -38,6 +38,26 @@ export interface AuthResponse {
   user: User;
 }
 
+export type SenderType = 'USER' | 'AI';
+
+export interface ChatMessage {
+  id: string;
+  diagram_id: string;
+  sender_id: string;
+  sender_name: string;
+  sender_avatar_color: string;
+  sender_type: SenderType;
+  content: string;
+  addressed_to?: string | null;
+  applied_commands_count?: number;
+  created_at: string;
+}
+
+export interface ChatHistoryResponse {
+  diagram_id: string;
+  messages: ChatMessage[];
+}
+
 export type WebSocketMessage =
   | {
       type: 'ROOM_STATE';
@@ -76,6 +96,18 @@ export type WebSocketMessage =
       document: CanonicalUmlDocument;
       version?: number;
       command?: UmlCommand;
+    }
+  | {
+      type: 'CHAT_MESSAGE';
+      diagram_id: string;
+      message: ChatMessage;
+    }
+  | {
+      type: 'TYPING_INDICATOR';
+      diagram_id: string;
+      user_id: string;
+      user_name: string;
+      is_typing: boolean;
     }
   | {
       type: 'PING' | 'PONG';

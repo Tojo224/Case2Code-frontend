@@ -76,10 +76,31 @@ class CollaborationClient {
       case 'DOCUMENT_UPDATED':
         diagram.applyRemoteDocument(msg.document);
         break;
+      case 'CHAT_MESSAGE':
+        collab.addChatMessage(msg.message);
+        break;
+      case 'TYPING_INDICATOR':
+        collab.setTypingUser(msg.user_id, msg.user_name, msg.is_typing);
+        break;
       case 'PING':
         this.send({ type: 'PONG' });
         break;
     }
+  }
+
+  sendChatMessage(content: string, aiMode: string = 'advisory') {
+    this.send({
+      type: 'SEND_CHAT_MESSAGE',
+      content,
+      ai_mode: aiMode,
+    });
+  }
+
+  setTyping(isTyping: boolean) {
+    this.send({
+      type: 'SET_TYPING',
+      is_typing: isTyping,
+    });
   }
 
   sendCursor(x: number, y: number) {

@@ -122,15 +122,15 @@ export const Navbar: React.FC = () => {
 
           <button
             onClick={toggleAssistant}
-            title="Asistente CASE IA"
+            title="Senior AI Colleague & Chat de Equipo"
             className={`flex items-center space-x-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-md shadow-sm transition border ${
               isAssistantOpen
-                ? 'bg-sky-600 text-white border-sky-500 hover:bg-sky-700'
+                ? 'bg-purple-600 text-white border-purple-500 hover:bg-purple-700'
                 : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750'
             }`}
           >
-            <Bot className={`w-3.5 h-3.5 shrink-0 ${isAssistantOpen ? 'text-white' : 'text-sky-600 dark:text-sky-400'}`} />
-            <span className="hidden lg:inline">Asistente CASE</span>
+            <Bot className={`w-3.5 h-3.5 shrink-0 ${isAssistantOpen ? 'text-white' : 'text-purple-600 dark:text-purple-400'}`} />
+            <span className="hidden lg:inline">Senior AI</span>
           </button>
 
           <button

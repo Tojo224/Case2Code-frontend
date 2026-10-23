@@ -229,6 +229,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       // Connect real-time collaboration
       const token = localStorage.getItem('case2code_token');
       collaborationWs.connect(newDoc.id, token);
+      useCollaborationStore.getState().loadChatHistory(newDoc.id);
       api.getCollaborators(newDoc.id)
         .then((collabs) => useCollaborationStore.getState().setCollaborators(collabs))
         .catch(() => {});
@@ -247,6 +248,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       // Connect real-time collaboration
       const token = localStorage.getItem('case2code_token');
       collaborationWs.connect(doc.id, token);
+      useCollaborationStore.getState().loadChatHistory(doc.id);
       api.getCollaborators(doc.id)
         .then((collabs) => useCollaborationStore.getState().setCollaborators(collabs))
         .catch(() => {});
@@ -574,6 +576,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       // Connect real-time collaboration
       const token = localStorage.getItem('case2code_token');
       collaborationWs.connect(newDoc.id, token);
+      useCollaborationStore.getState().loadChatHistory(newDoc.id);
       api.getCollaborators(newDoc.id)
         .then((collabs) => useCollaborationStore.getState().setCollaborators(collabs))
         .catch(() => {});
