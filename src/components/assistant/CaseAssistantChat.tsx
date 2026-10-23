@@ -3,6 +3,7 @@ import { useDiagramStore } from '../../store/useDiagramStore';
 import { useCollaborationStore } from '../../store/useCollaborationStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { collaborationWs } from '../../services/websocket';
+import { api } from '../../services/api';
 import {
   Bot,
   Sparkles,
@@ -16,8 +17,11 @@ import {
   Lightbulb,
   Zap,
   AtSign,
+  Cpu,
+  Terminal,
+  RefreshCw,
 } from 'lucide-react';
-import { ChatMessage } from '../../types/collaboration';
+import { AiProviderStatus, ChatMessage } from '../../types/collaboration';
 
 export const CaseAssistantChat: React.FC = () => {
   const { isAssistantOpen, toggleAssistant, sendAssistantPrompt, currentDocument } =
@@ -43,17 +47,55 @@ export const CaseAssistantChat: React.FC = () => {
     name: string;
   } | null>(null);
 
+  // Local AI & Provider Configuration State
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [aiStatus, setAiStatus] = useState<AiProviderStatus | null>(null);
+  const [providerModeInput, setProviderModeInput] = useState<'local' | 'hybrid' | 'gemini'>('hybrid');
+  const [localUrlInput, setLocalUrlInput] = useState('http://localhost:11434');
+  const [localModelInput, setLocalModelInput] = useState('qwen2.5-coder:3b');
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const typingTimeoutRef = useRef<number | null>(null);
 
-  // Load chat history when diagram changes or drawer opens
+  const fetchAiStatus = async () => {
+    try {
+      const status = await api.getAiConfig();
+      setAiStatus(status);
+      setProviderModeInput(status.provider_mode);
+      setLocalUrlInput(status.local_base_url);
+      setLocalModelInput(status.local_model);
+    } catch {
+      // Ignore if offline during initial render
+    }
+  };
+
+  // Load chat history and AI provider status when diagram changes or drawer opens
   useEffect(() => {
     if (currentDocument?.id && isAssistantOpen) {
       loadChatHistory(currentDocument.id);
+      fetchAiStatus();
     }
   }, [currentDocument?.id, isAssistantOpen, loadChatHistory]);
+
+  const handleSaveAiConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingConfig(true);
+    try {
+      const updated = await api.updateAiConfig({
+        provider_mode: providerModeInput,
+        local_base_url: localUrlInput.trim(),
+        local_model: localModelInput.trim(),
+      });
+      setAiStatus(updated);
+    } catch (err) {
+      console.error('Failed to update AI config:', err);
+    } finally {
+      setIsSavingConfig(false);
+    }
+  };
 
   // Speech Recognition setup
   useEffect(() => {
@@ -99,7 +141,6 @@ export const CaseAssistantChat: React.FC = () => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputPrompt(e.target.value);
 
-    // Notify backend that this user is typing
     collaborationWs.setTyping(true);
 
     if (typingTimeoutRef.current) {
@@ -173,14 +214,12 @@ export const CaseAssistantChat: React.FC = () => {
     const prompt = (textToSend || inputPrompt).trim();
     if ((!prompt && !attachedImage) || !currentDocument) return;
 
-    // Reset typing state
     if (typingTimeoutRef.current) {
       window.clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = null;
     }
     collaborationWs.setTyping(false);
 
-    // If an image is attached, process it through the vision pipeline
     if (attachedImage) {
       const finalPrompt = prompt || 'Replicar este boceto en el diagrama UML.';
       const currentAttached = attachedImage;
@@ -201,7 +240,6 @@ export const CaseAssistantChat: React.FC = () => {
       return;
     }
 
-    // Standard text message sent to the shared multiplayer room WebSocket
     setInputPrompt('');
     collaborationWs.sendChatMessage(prompt, aiMode);
   };
@@ -213,7 +251,6 @@ export const CaseAssistantChat: React.FC = () => {
     }
   };
 
-  // Determine typing participants
   const isAiTyping = Boolean(typingUsers['ai-senior']?.isTyping);
   const typingUserNames = useMemo(() => {
     return Object.entries(typingUsers)
@@ -222,10 +259,10 @@ export const CaseAssistantChat: React.FC = () => {
   }, [typingUsers, currentUser?.id]);
 
   const quickPrompts = [
-    '¿Qué opinás de la cardinalidad entre las entidades?',
-    'Creá la clase Factura con id, fecha y total',
-    'Revisá si el diseño cumple con 3FN',
-    'Relacioná Cliente con Pedido de 1 a N',
+    '¿Qué opinas de la cardinalidad entre las entidades?',
+    'Crea la clase Factura con id, fecha y total',
+    'Revisa si el diseño cumple con 3FN',
+    'Relaciona Cliente con Pedido de 1 a N',
   ];
 
   if (!isAssistantOpen) return null;
@@ -234,7 +271,7 @@ export const CaseAssistantChat: React.FC = () => {
     <aside
       onDragOver={(e) => e.preventDefault()}
       onDrop={handleDrop}
-      className="fixed right-0 sm:right-4 top-14 sm:top-16 bottom-0 sm:bottom-4 w-full sm:w-[420px] max-w-full bg-white dark:bg-slate-900 border-l sm:border border-slate-200/90 dark:border-slate-800 rounded-none sm:rounded-2xl shadow-2xl flex flex-col z-40 overflow-hidden animate-in slide-in-from-right duration-200 transition-colors"
+      className="fixed right-0 sm:right-4 top-14 sm:top-16 bottom-0 sm:bottom-4 w-full sm:w-[430px] max-w-full bg-white dark:bg-slate-900 border-l sm:border border-slate-200/90 dark:border-slate-800 rounded-none sm:rounded-2xl shadow-2xl flex flex-col z-40 overflow-hidden animate-in slide-in-from-right duration-200 transition-colors"
     >
       {/* Header */}
       <div className="bg-slate-900 dark:bg-slate-950 text-white px-4 py-3 flex items-center justify-between border-b border-slate-800">
@@ -245,32 +282,155 @@ export const CaseAssistantChat: React.FC = () => {
           <div>
             <div className="flex items-center space-x-1.5">
               <h3 className="font-bold text-sm tracking-tight text-white">Senior AI Colleague</h3>
-              <span className="bg-purple-500/30 text-purple-200 text-[10px] font-semibold px-1.5 py-0.5 rounded border border-purple-400/30">
-                Multiplayer Room
+              <span
+                className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
+                  aiStatus?.local_online
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40'
+                    : 'bg-purple-500/30 text-purple-200 border-purple-400/30'
+                }`}
+              >
+                {aiStatus?.local_online ? `Local: ${aiStatus.local_model}` : 'Hybrid AI Room'}
               </span>
             </div>
             <div className="flex items-center space-x-1.5 mt-0.5">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               <span className="text-[11px] text-slate-400">
-                {activeUsers.length} colega{activeUsers.length === 1 ? '' : 's'} en la sala
+                {activeUsers.length} desarrollador{activeUsers.length === 1 ? '' : 'es'} en sala
               </span>
             </div>
           </div>
         </div>
 
-        <button
-          onClick={toggleAssistant}
-          className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition"
-          title="Cerrar chat"
-        >
-          <X className="w-4 h-4" />
-        </button>
+        <div className="flex items-center space-x-1">
+          <button
+            onClick={() => {
+              setIsConfigOpen((v) => !v);
+              if (!isConfigOpen) fetchAiStatus();
+            }}
+            className={`p-1.5 rounded-lg transition ${
+              isConfigOpen
+                ? 'bg-purple-600 text-white'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+            title="Configurar Motor IA Local (Ollama / vLLM / Colab)"
+          >
+            <Cpu className="w-4 h-4" />
+          </button>
+          <button
+            onClick={toggleAssistant}
+            className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition"
+            title="Cerrar chat"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
+
+      {/* Collapsible Local AI Configuration Panel */}
+      {isConfigOpen && (
+        <form
+          onSubmit={handleSaveAiConfig}
+          className="p-3 bg-slate-900/95 text-slate-200 border-b border-slate-800 space-y-2.5 text-xs animate-in fade-in duration-150"
+        >
+          <div className="flex items-center justify-between">
+            <span className="font-bold text-[11px] uppercase tracking-wider text-purple-300 flex items-center space-x-1.5">
+              <Cpu className="w-3.5 h-3.5" />
+              <span>Motor de Inferencia (Local / Híbrido)</span>
+            </span>
+            <span
+              className={`inline-flex items-center space-x-1 text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                aiStatus?.local_online
+                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-700'
+                  : 'bg-amber-950 text-amber-300 border border-amber-700'
+              }`}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  aiStatus?.local_online ? 'bg-emerald-400' : 'bg-amber-400'
+                }`}
+              />
+              <span>{aiStatus?.local_online ? 'Ollama Online' : 'Fallback Activo'}</span>
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+            {(['local', 'hybrid', 'gemini'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setProviderModeInput(m)}
+                className={`py-1 rounded text-[11px] font-medium transition ${
+                  providerModeInput === m
+                    ? 'bg-purple-600 text-white font-semibold'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {m === 'local' ? 'Solo Local' : m === 'hybrid' ? 'Híbrido (Auto)' : 'Cloud Gemini'}
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-1.5">
+            <div>
+              <label className="block text-[10px] text-slate-400 mb-0.5">
+                URL del Nodo Local (Ollama / LM Studio / Túnel Colab):
+              </label>
+              <input
+                type="text"
+                value={localUrlInput}
+                onChange={(e) => setLocalUrlInput(e.target.value)}
+                placeholder="http://localhost:11434 o https://xxxx.trycloudflare.com"
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-[11px] text-white focus:outline-none focus:border-purple-500"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] text-slate-400 mb-0.5">
+                Modelo Local (Ollama / GGUF):
+              </label>
+              <input
+                type="text"
+                value={localModelInput}
+                onChange={(e) => setLocalModelInput(e.target.value)}
+                placeholder="qwen2.5-coder:3b o llama3.2:3b"
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-[11px] text-white focus:outline-none focus:border-purple-500"
+              />
+              {aiStatus?.local_available_models && aiStatus.local_available_models.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {aiStatus.local_available_models.slice(0, 4).map((mdl) => (
+                    <button
+                      key={mdl}
+                      type="button"
+                      onClick={() => setLocalModelInput(mdl)}
+                      className="text-[10px] bg-slate-800 hover:bg-purple-900/60 text-purple-200 px-1.5 py-0.5 rounded border border-slate-700"
+                    >
+                      {mdl}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-[10px] text-slate-400 truncate max-w-[230px]">
+              Último motor: <strong className="text-slate-200">{aiStatus?.last_used_engine || 'N/A'}</strong>
+            </span>
+            <button
+              type="submit"
+              disabled={isSavingConfig}
+              className="flex items-center space-x-1 bg-purple-600 hover:bg-purple-500 text-white px-2.5 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+            >
+              <RefreshCw className={`w-3 h-3 ${isSavingConfig ? 'animate-spin' : ''}`} />
+              <span>Guardar y Probar</span>
+            </button>
+          </div>
+        </form>
+      )}
 
       {/* Mode Selector Bar (Advisory vs Pair Programmer) */}
       <div className="px-3 py-2 bg-slate-100/90 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
         <div className="flex items-center space-x-1 text-[11px] font-medium text-slate-600 dark:text-slate-300">
-          <span>Modo de la IA:</span>
+          <span>Rol del Senior AI:</span>
         </div>
         <div className="flex bg-slate-200/80 dark:bg-slate-900/80 p-0.5 rounded-lg border border-slate-300/60 dark:border-slate-700">
           <button
@@ -280,7 +440,7 @@ export const CaseAssistantChat: React.FC = () => {
                 ? 'bg-white dark:bg-indigo-600 text-indigo-700 dark:text-white shadow-xs font-semibold'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
-            title="Asesor Senior: Revisa, explica y aconseja sin alterar el diagrama directamente"
+            title="Asesor Senior: Revisa arquitectura, sugiere patrones y responde dudas sin modificar el lienzo"
           >
             <Lightbulb className="w-3 h-3 text-amber-500 dark:text-amber-300" />
             <span>Asesor</span>
@@ -292,7 +452,7 @@ export const CaseAssistantChat: React.FC = () => {
                 ? 'bg-white dark:bg-purple-600 text-purple-700 dark:text-white shadow-xs font-semibold'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
-            title="Pair Programmer: Modifica el diagrama UML en el lienzo en tiempo real"
+            title="Pair Programmer: Ejecuta modificaciones y crea clases/relaciones en el diagrama en tiempo real"
           >
             <Zap className="w-3 h-3 text-purple-500 dark:text-purple-300" />
             <span>Pair Dev</span>
@@ -311,14 +471,17 @@ export const CaseAssistantChat: React.FC = () => {
               ¡Hola equipo! Soy su desarrollador Senior AI
             </h4>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed max-w-xs mx-auto">
-              Estoy en la misma sala que ustedes. Pueden hacerme preguntas de arquitectura o pedirme que agregue clases al diagrama.
-              Sé quién me pregunta y responderé mencionándolo en vivo.
+              Estoy conectado en la misma sala con ustedes. Pueden hacerme consultas de arquitectura o pedirme cambios en el diagrama; sé quién pregunta y le responderé mencionándolo en vivo.
             </p>
           </div>
         ) : (
           chatMessages.map((msg: ChatMessage) => {
             const isAi = msg.sender_type === 'AI';
             const isMe = msg.sender_id === currentUser?.id;
+            const cmdCount =
+              (msg.executed_commands ? msg.executed_commands.length : 0) ||
+              msg.applied_commands_count ||
+              0;
 
             return (
               <div
@@ -328,7 +491,7 @@ export const CaseAssistantChat: React.FC = () => {
                 }`}
               >
                 {/* Author badge header */}
-                <div className="flex items-center space-x-1.5 mb-1 px-1">
+                <div className="flex flex-wrap items-center gap-1.5 mb-1 px-1">
                   {isAi ? (
                     <>
                       <div className="w-4 h-4 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center text-[9px] text-white font-bold">
@@ -341,6 +504,12 @@ export const CaseAssistantChat: React.FC = () => {
                         <span className="inline-flex items-center space-x-0.5 bg-indigo-100 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded px-1.5 py-0.2 text-[10px] font-medium">
                           <AtSign className="w-2.5 h-2.5" />
                           <span>{msg.addressed_to}</span>
+                        </span>
+                      )}
+                      {msg.ai_engine && (
+                        <span className="inline-flex items-center space-x-1 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/70 rounded px-1.5 py-0.2 text-[9px] font-mono">
+                          <Cpu className="w-2.5 h-2.5" />
+                          <span>{msg.ai_engine}</span>
                         </span>
                       )}
                     </>
@@ -376,11 +545,26 @@ export const CaseAssistantChat: React.FC = () => {
                 >
                   <p className="whitespace-pre-line select-text">{msg.content}</p>
 
-                  {/* Applied UML Commands badge */}
-                  {isAi && (msg.applied_commands_count || 0) > 0 && (
-                    <div className="mt-2 pt-2 border-t border-purple-100 dark:border-purple-900/50 flex items-center space-x-1.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                      <span>Modificó el diagrama UML (+{msg.applied_commands_count} cambios aplicados)</span>
+                  {/* Applied UML Commands badge and command chips */}
+                  {isAi && cmdCount > 0 && (
+                    <div className="mt-2 pt-2 border-t border-purple-100 dark:border-purple-900/50 space-y-1">
+                      <div className="flex items-center space-x-1.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                        <span>Modificó el diagrama UML (+{cmdCount} cambios aplicados)</span>
+                      </div>
+                      {msg.executed_commands && msg.executed_commands.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {msg.executed_commands.map((cmd, idx) => (
+                            <span
+                              key={idx}
+                              className="bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800 rounded px-1.5 py-0.5 text-[9px] font-mono flex items-center space-x-1"
+                            >
+                              <Terminal className="w-2.5 h-2.5" />
+                              <span>{cmd.command_type}</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -441,7 +625,6 @@ export const CaseAssistantChat: React.FC = () => {
 
       {/* Input Form */}
       <div className="p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
-        {/* Attached image preview chip */}
         {attachedImage && (
           <div className="mb-2 flex items-center justify-between bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 p-2 rounded-xl text-xs text-indigo-900 dark:text-indigo-200 animate-in fade-in">
             <div className="flex items-center space-x-2 min-w-0">
@@ -481,7 +664,6 @@ export const CaseAssistantChat: React.FC = () => {
         )}
 
         <div className="flex items-center space-x-1.5">
-          {/* Hidden File Input for Image Upload */}
           <input
             type="file"
             ref={fileInputRef}
@@ -494,11 +676,10 @@ export const CaseAssistantChat: React.FC = () => {
             className="hidden"
           />
 
-          {/* Upload Image Button */}
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            title="Subir foto o boceto a mano (o pegá con Ctrl+V)"
+            title="Subir foto o boceto a mano (Ctrl+V)"
             className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition shrink-0"
           >
             <ImageIcon className="w-4 h-4" />
@@ -515,7 +696,7 @@ export const CaseAssistantChat: React.FC = () => {
               placeholder={
                 attachedImage
                   ? 'Instrucción para el boceto (Enter para replicar)...'
-                  : 'Pregunta al Senior o habla con tu equipo...'
+                  : 'Pregunta al Senior AI o escribe al equipo...'
               }
               className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:text-slate-100 rounded-xl px-3 py-2.5 pr-9 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-750 transition"
             />

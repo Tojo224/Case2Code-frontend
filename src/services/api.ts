@@ -4,7 +4,7 @@ import {
   CommandExecutionResponse,
   UmlCommand,
 } from '../types/uml';
-import { ChatHistoryResponse, ProjectCollaborator } from '../types/collaboration';
+import { AiProviderStatus, ChatHistoryResponse, ProjectCollaborator } from '../types/collaboration';
 
 const BASE_URL = '/api';
 
@@ -209,6 +209,28 @@ export const api = {
       headers: getAuthHeaders(),
     });
     if (!res.ok) throw new Error('Failed to fetch chat history');
+    return res.json();
+  },
+
+  async getAiConfig(): Promise<AiProviderStatus> {
+    const res = await fetch(`${BASE_URL}/diagrams/ai/config`, {
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error('Failed to fetch AI provider config');
+    return res.json();
+  },
+
+  async updateAiConfig(payload: {
+    provider_mode?: 'local' | 'hybrid' | 'gemini';
+    local_base_url?: string;
+    local_model?: string;
+  }): Promise<AiProviderStatus> {
+    const res = await fetch(`${BASE_URL}/diagrams/ai/config`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('Failed to update AI provider config');
     return res.json();
   },
 };

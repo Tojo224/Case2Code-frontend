@@ -49,8 +49,21 @@ export interface ChatMessage {
   sender_type: SenderType;
   content: string;
   addressed_to?: string | null;
+  ai_engine?: string | null;
+  executed_commands?: UmlCommand[] | null;
   applied_commands_count?: number;
   created_at: string;
+}
+
+export interface AiProviderStatus {
+  provider_mode: 'local' | 'hybrid' | 'gemini';
+  local_base_url: string;
+  local_model: string;
+  local_online: boolean;
+  local_available_models: string[];
+  gemini_configured: boolean;
+  gemini_model?: string | null;
+  last_used_engine: string;
 }
 
 export interface ChatHistoryResponse {
