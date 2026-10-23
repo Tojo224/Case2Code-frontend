@@ -81,6 +81,72 @@ export const api = {
     window.URL.revokeObjectURL(downloadUrl);
   },
 
+  async exportXmi(diagramId: string, diagramName?: string): Promise<void> {
+    const url = `${BASE_URL}/diagrams/${diagramId}/export/xmi`;
+    const token = localStorage.getItem('case2code_token');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'XMI export failed' }));
+      throw new Error(err.detail || 'XMI export failed');
+    }
+    const blob = await res.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    const safeName = (diagramName || `diagram-${diagramId}`).replace(/[^a-zA-Z0-9_\-]/g, '_');
+    a.download = `${safeName}.xmi`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(downloadUrl);
+  },
+
+  async importXmi(diagramId: string, file: File): Promise<CanonicalUmlDocument> {
+    const url = `${BASE_URL}/diagrams/${diagramId}/import/xmi`;
+    const token = localStorage.getItem('case2code_token');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'XMI import failed' }));
+      throw new Error(err.detail || 'XMI import failed');
+    }
+    return res.json();
+  },
+
+  async importNewDiagramXmi(file: File, name?: string): Promise<CanonicalUmlDocument> {
+    const query = name ? `?name=${encodeURIComponent(name)}` : '';
+    const url = `${BASE_URL}/diagrams/import/xmi${query}`;
+    const token = localStorage.getItem('case2code_token');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Failed to create diagram from XMI' }));
+      throw new Error(err.detail || 'Failed to create diagram from XMI');
+    }
+    return res.json();
+  },
+
   async sendAssistantPrompt(
     diagramId: string,
     prompt: string,

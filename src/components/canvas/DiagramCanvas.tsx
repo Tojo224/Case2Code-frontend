@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ReactFlow,
   Controls,
@@ -6,6 +6,7 @@ import {
   BackgroundVariant,
   MiniMap,
   ConnectionMode,
+  ReactFlowInstance,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -14,6 +15,7 @@ import { useThemeStore } from '../../store/useThemeStore';
 import { UmlClassNode } from './UmlClassNode';
 import { UmlRelationshipEdge } from './UmlRelationshipEdge';
 import { RelationshipModal } from '../modals/RelationshipModal';
+import { CreateClassModal } from '../modals/CreateClassModal';
 import { LiveCursors } from '../collaboration/LiveCursors';
 
 export const DiagramCanvas: React.FC = () => {
@@ -26,15 +28,40 @@ export const DiagramCanvas: React.FC = () => {
     onConnect,
     activeRelationType,
     setActiveRelationType,
+    openCreateClassModal,
   } = useDiagramStore();
   const isDark = useThemeStore((s) => s.isDark);
+  const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null);
 
   const nodeTypes = useMemo(() => ({ umlClass: UmlClassNode }), []);
   const edgeTypes = useMemo(() => ({ umlRelationship: UmlRelationshipEdge }), []);
 
+  const handleCanvasDoubleClick = (event: React.MouseEvent) => {
+    // Do not trigger if in active relationship connecting mode
+    if (activeRelationType) return;
+
+    const target = event.target as HTMLElement;
+    // Check if clicked on empty canvas pane or background
+    if (
+      target.classList.contains('react-flow__pane') ||
+      target.closest('.react-flow__pane')
+    ) {
+      if (rfInstance) {
+        const position = rfInstance.screenToFlowPosition({
+          x: event.clientX,
+          y: event.clientY,
+        });
+        openCreateClassModal(position);
+      } else {
+        openCreateClassModal();
+      }
+    }
+  };
+
   return (
     <div className={`w-full h-full relative bg-slate-50 dark:bg-slate-950 transition-colors ${activeRelationType ? 'cursor-crosshair' : ''}`}>
       <ReactFlow
+        onInit={setRfInstance}
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
@@ -44,6 +71,8 @@ export const DiagramCanvas: React.FC = () => {
         connectionMode={ConnectionMode.Loose}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
+        zoomOnDoubleClick={false}
+        onDoubleClick={handleCanvasDoubleClick}
         fitView
         minZoom={0.2}
         maxZoom={2}
@@ -79,6 +108,9 @@ export const DiagramCanvas: React.FC = () => {
 
       {/* Relationship Creation Modal */}
       <RelationshipModal />
+
+      {/* Class Creation Modal */}
+      <CreateClassModal />
     </div>
   );
 };
