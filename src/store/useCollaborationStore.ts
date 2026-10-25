@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { ProjectCollaborator, UserPresence } from '../types/collaboration';
+import { ChatMessage, ProjectCollaborator, UserPresence } from '../types/collaboration';
+import { api } from '../services/api';
 
 export interface RemoteCursor {
   userId: string;
@@ -10,6 +11,8 @@ export interface RemoteCursor {
   lastSeen: number;
 }
 
+export type AiColleagueMode = 'advisory' | 'pair_programmer';
+
 interface CollaborationState {
   isConnected: boolean;
   activeUsers: UserPresence[];
@@ -18,6 +21,11 @@ interface CollaborationState {
   collaborators: ProjectCollaborator[];
   isInviteModalOpen: boolean;
   isAuthModalOpen: boolean;
+
+  // Senior AI & Group Chat State
+  chatMessages: ChatMessage[];
+  typingUsers: Record<string, { userName: string; isTyping: boolean }>;
+  aiMode: AiColleagueMode;
 
   setConnected: (connected: boolean) => void;
   setRoomState: (users: UserPresence[]) => void;
@@ -28,6 +36,14 @@ interface CollaborationState {
   setCollaborators: (collaborators: ProjectCollaborator[]) => void;
   setInviteModalOpen: (open: boolean) => void;
   setAuthModalOpen: (open: boolean) => void;
+
+  // Chat Actions
+  setAiMode: (mode: AiColleagueMode) => void;
+  addChatMessage: (msg: ChatMessage) => void;
+  setChatMessages: (msgs: ChatMessage[]) => void;
+  setTypingUser: (userId: string, userName: string, isTyping: boolean) => void;
+  loadChatHistory: (diagramId: string) => Promise<void>;
+
   clearState: () => void;
 }
 
@@ -39,6 +55,10 @@ export const useCollaborationStore = create<CollaborationState>((set) => ({
   collaborators: [],
   isInviteModalOpen: false,
   isAuthModalOpen: false,
+
+  chatMessages: [],
+  typingUsers: {},
+  aiMode: 'advisory',
 
   setConnected: (connected) => set({ isConnected: connected }),
 
@@ -65,11 +85,14 @@ export const useCollaborationStore = create<CollaborationState>((set) => ({
       delete newCursors[userId];
       const newSelections = { ...state.remoteSelections };
       delete newSelections[userId];
+      const newTyping = { ...state.typingUsers };
+      delete newTyping[userId];
 
       return {
         activeUsers: state.activeUsers.filter((u) => u.user_id !== userId),
         remoteCursors: newCursors,
         remoteSelections: newSelections,
+        typingUsers: newTyping,
       };
     }),
 
@@ -100,6 +123,41 @@ export const useCollaborationStore = create<CollaborationState>((set) => ({
   setInviteModalOpen: (open) => set({ isInviteModalOpen: open }),
   setAuthModalOpen: (open) => set({ isAuthModalOpen: open }),
 
+  setAiMode: (mode) => set({ aiMode: mode }),
+
+  addChatMessage: (msg) =>
+    set((state) => {
+      // Prevent duplicate messages if already present
+      if (state.chatMessages.some((m) => m.id === msg.id)) {
+        return state;
+      }
+      return { chatMessages: [...state.chatMessages, msg] };
+    }),
+
+  setChatMessages: (msgs) => set({ chatMessages: msgs }),
+
+  setTypingUser: (userId, userName, isTyping) =>
+    set((state) => {
+      const updated = { ...state.typingUsers };
+      if (!isTyping) {
+        delete updated[userId];
+      } else {
+        updated[userId] = { userName, isTyping: true };
+      }
+      return { typingUsers: updated };
+    }),
+
+  loadChatHistory: async (diagramId: string) => {
+    try {
+      const res = await api.getChatHistory(diagramId);
+      if (res && Array.isArray(res.messages)) {
+        set({ chatMessages: res.messages });
+      }
+    } catch (e) {
+      console.warn('Could not load chat history:', e);
+    }
+  },
+
   clearState: () =>
     set({
       isConnected: false,
@@ -107,6 +165,8 @@ export const useCollaborationStore = create<CollaborationState>((set) => ({
       remoteCursors: {},
       remoteSelections: {},
       collaborators: [],
+      chatMessages: [],
+      typingUsers: {},
     }),
 }));
 

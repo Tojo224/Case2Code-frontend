@@ -92,5 +92,56 @@ describe('useCollaborationStore and Real-Time Multi-user Sync', () => {
     expect(diagramState.nodes[0].id).toBe('cls-remoto');
     expect(diagramState.nodes[0].data.name).toBe('Pago');
   });
+
+  it('manages multiplayer chat messages and typing indicators', () => {
+    const store = useCollaborationStore.getState();
+
+    // 1. Initial state
+    expect(store.chatMessages.length).toBe(0);
+    expect(store.aiMode).toBe('advisory');
+
+    // 2. Set AI mode
+    store.setAiMode('pair_programmer');
+    expect(useCollaborationStore.getState().aiMode).toBe('pair_programmer');
+
+    // 3. Add user chat message
+    store.addChatMessage({
+      id: 'msg-1',
+      diagram_id: 'diag-multiplayer',
+      sender_id: 'usr-prof',
+      sender_name: 'Prof. Carlos',
+      sender_avatar_color: '#3B82F6',
+      sender_type: 'USER',
+      content: 'Senior AI, ¿qué opinas de este modelo?',
+      created_at: new Date().toISOString(),
+    });
+
+    expect(useCollaborationStore.getState().chatMessages.length).toBe(1);
+
+    // 4. Add AI response with speaker targeting
+    store.addChatMessage({
+      id: 'msg-2',
+      diagram_id: 'diag-multiplayer',
+      sender_id: 'ai-senior',
+      sender_name: 'Senior AI',
+      sender_avatar_color: '#8B5CF6',
+      sender_type: 'AI',
+      content: '@Prof. Carlos, sugiero revisar la relación entre Pago y Reserva.',
+      addressed_to: 'Prof. Carlos',
+      applied_commands_count: 0,
+      created_at: new Date().toISOString(),
+    });
+
+    const messages = useCollaborationStore.getState().chatMessages;
+    expect(messages.length).toBe(2);
+    expect(messages[1].addressed_to).toBe('Prof. Carlos');
+
+    // 5. Test typing indicators
+    store.setTypingUser('usr-student', 'Ana Gómez', true);
+    expect(useCollaborationStore.getState().typingUsers['usr-student']?.isTyping).toBe(true);
+
+    store.setTypingUser('usr-student', 'Ana Gómez', false);
+    expect(useCollaborationStore.getState().typingUsers['usr-student']).toBeUndefined();
+  });
 });
 

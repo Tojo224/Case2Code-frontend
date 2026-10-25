@@ -1,6 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useDiagramStore } from '../../store/useDiagramStore';
-import { Code2, Download, Plus, AlertCircle, RefreshCw, FolderPlus, Bot } from 'lucide-react';
+import {
+  Code2,
+  Download,
+  Plus,
+  AlertCircle,
+  RefreshCw,
+  FolderPlus,
+  Bot,
+  FileDown,
+  FileUp,
+} from 'lucide-react';
 import { CollaboratorAvatars } from '../collaboration/CollaboratorAvatars';
 import { UserMenu } from '../auth/UserMenu';
 import { ThemeToggle } from './ThemeToggle';
@@ -11,36 +21,52 @@ export const Navbar: React.FC = () => {
     diagramsList,
     createDiagram,
     loadDiagram,
-    dispatchCommand,
     generateBackend,
     isGenerating,
     error,
     clearError,
     isAssistantOpen,
     toggleAssistant,
+    openCreateClassModal,
+    exportXmi,
+    importXmi,
+    importNewDiagramXmi,
+    isExportingXmi,
+    isImportingXmi,
   } = useDiagramStore();
 
   const [isCreatingDiag, setIsCreatingDiag] = useState(false);
   const [newDiagName, setNewDiagName] = useState('');
+  const [selectedImportFile, setSelectedImportFile] = useState<File | null>(null);
+
+  const importFileInputRef = useRef<HTMLInputElement>(null);
+  const newDiagFileInputRef = useRef<HTMLInputElement>(null);
 
   const handleAddClass = () => {
-    const className = prompt('Enter new class name (PascalCase):', 'NuevaClase');
-    if (!className || !className.trim()) return;
+    openCreateClassModal();
+  };
 
-    // Calculate a nice viewport position
-    const randomOffset = Math.floor(Math.random() * 80);
-    dispatchCommand({
-      command_type: 'CREATE_CLASS',
-      name: className.trim(),
-      position: { x: 150 + randomOffset, y: 150 + randomOffset },
-    });
+  const handleImportFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await importXmi(file);
+    if (importFileInputRef.current) {
+      importFileInputRef.current.value = '';
+    }
   };
 
   const handleCreateDiagramSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newDiagName.trim()) return;
-    await createDiagram(newDiagName.trim());
+    if (!newDiagName.trim() && !selectedImportFile) return;
+
+    if (selectedImportFile) {
+      await importNewDiagramXmi(selectedImportFile, newDiagName.trim() || undefined);
+    } else {
+      await createDiagram(newDiagName.trim());
+    }
+
     setNewDiagName('');
+    setSelectedImportFile(null);
     setIsCreatingDiag(false);
   };
 
@@ -96,15 +122,15 @@ export const Navbar: React.FC = () => {
 
           <button
             onClick={toggleAssistant}
-            title="Asistente CASE IA"
+            title="Senior AI Colleague & Chat de Equipo"
             className={`flex items-center space-x-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-md shadow-sm transition border ${
               isAssistantOpen
-                ? 'bg-sky-600 text-white border-sky-500 hover:bg-sky-700'
+                ? 'bg-purple-600 text-white border-purple-500 hover:bg-purple-700'
                 : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750'
             }`}
           >
-            <Bot className={`w-3.5 h-3.5 shrink-0 ${isAssistantOpen ? 'text-white' : 'text-sky-600 dark:text-sky-400'}`} />
-            <span className="hidden lg:inline">Asistente CASE</span>
+            <Bot className={`w-3.5 h-3.5 shrink-0 ${isAssistantOpen ? 'text-white' : 'text-purple-600 dark:text-purple-400'}`} />
+            <span className="hidden lg:inline">Senior AI</span>
           </button>
 
           <button
@@ -120,6 +146,45 @@ export const Navbar: React.FC = () => {
             )}
             <span className="hidden sm:inline">{isGenerating ? 'Generando...' : 'Spring Boot'}</span>
           </button>
+
+          {/* Enterprise Architect XMI Interchange Controls */}
+          <div className="flex items-center space-x-1 border border-slate-200 dark:border-slate-700 rounded-md p-0.5 bg-slate-50 dark:bg-slate-800/80">
+            <button
+              onClick={exportXmi}
+              disabled={isExportingXmi || !currentDocument || currentDocument.classes.length === 0}
+              title="Exportar a Enterprise Architect (XMI 2.1)"
+              className="flex items-center space-x-1 text-slate-700 dark:text-slate-200 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-white dark:hover:bg-slate-700 px-2 py-1 rounded text-xs font-medium transition disabled:opacity-40"
+            >
+              {isExportingXmi ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-sky-600" />
+              ) : (
+                <FileDown className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
+              )}
+              <span className="hidden xl:inline">Exportar EA</span>
+            </button>
+
+            <button
+              onClick={() => importFileInputRef.current?.click()}
+              disabled={isImportingXmi || !currentDocument}
+              title="Importar modelo desde Enterprise Architect (XMI 2.1)"
+              className="flex items-center space-x-1 text-slate-700 dark:text-slate-200 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-white dark:hover:bg-slate-700 px-2 py-1 rounded text-xs font-medium transition disabled:opacity-40"
+            >
+              {isImportingXmi ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+              ) : (
+                <FileUp className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              )}
+              <span className="hidden xl:inline">Importar EA</span>
+            </button>
+
+            <input
+              ref={importFileInputRef}
+              type="file"
+              accept=".xmi,.xml"
+              className="hidden"
+              onChange={handleImportFileChange}
+            />
+          </div>
 
           <div className="hidden sm:block h-6 w-px bg-slate-200 dark:bg-slate-800 mx-0.5" />
 
@@ -156,29 +221,92 @@ export const Navbar: React.FC = () => {
             onSubmit={handleCreateDiagramSubmit}
             className="bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-sm w-full p-5 space-y-4 border border-slate-200 dark:border-slate-800"
           >
-            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Create New UML Diagram</h3>
-            <input
-              type="text"
-              required
-              autoFocus
-              placeholder="Diagram name (e.g. Peluqueria)"
-              value={newDiagName}
-              onChange={(e) => setNewDiagName(e.target.value)}
-              className="w-full text-xs px-3 py-2 border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
-            />
-            <div className="flex justify-end space-x-2">
+            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Crear o Importar Diagrama</h3>
+            
+            <div>
+              <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 block mb-1">
+                Nombre del Diagrama
+              </label>
+              <input
+                type="text"
+                required={!selectedImportFile}
+                autoFocus
+                placeholder="Ej. Veterinaria"
+                value={newDiagName}
+                onChange={(e) => setNewDiagName(e.target.value)}
+                className="w-full text-xs px-3 py-2 border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
+              />
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+              <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 block mb-1">
+                O importar archivo Enterprise Architect (.xmi / .xml)
+              </label>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => newDiagFileInputRef.current?.click()}
+                  className="px-2.5 py-1.5 border border-dashed border-slate-300 dark:border-slate-700 hover:border-sky-500 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 flex items-center space-x-1.5 w-full justify-center transition"
+                >
+                  <FileUp className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+                  <span className="truncate max-w-[200px]">
+                    {selectedImportFile ? selectedImportFile.name : 'Seleccionar archivo XMI...'}
+                  </span>
+                </button>
+                {selectedImportFile && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedImportFile(null);
+                      if (newDiagFileInputRef.current) newDiagFileInputRef.current.value = '';
+                    }}
+                    className="text-xs text-red-500 hover:underline shrink-0"
+                  >
+                    Quitar
+                  </button>
+                )}
+                <input
+                  ref={newDiagFileInputRef}
+                  type="file"
+                  accept=".xmi,.xml"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) {
+                      setSelectedImportFile(f);
+                      if (!newDiagName) {
+                        setNewDiagName(f.name.replace(/\.[^/.]+$/, ''));
+                      }
+                    }
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-1">
               <button
                 type="button"
-                onClick={() => setIsCreatingDiag(false)}
+                onClick={() => {
+                  setIsCreatingDiag(false);
+                  setSelectedImportFile(null);
+                }}
                 className="px-3 py-1.5 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
               >
-                Cancel
+                Cancelar
               </button>
               <button
                 type="submit"
-                className="px-3.5 py-1.5 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-700 rounded-lg shadow-sm"
+                disabled={isImportingXmi}
+                className="flex items-center space-x-1 px-3.5 py-1.5 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-700 rounded-lg shadow-sm disabled:opacity-50"
               >
-                Create
+                {isImportingXmi ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Importando...</span>
+                  </>
+                ) : (
+                  <span>{selectedImportFile ? 'Importar y Crear' : 'Crear'}</span>
+                )}
               </button>
             </div>
           </form>

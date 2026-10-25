@@ -11,6 +11,9 @@ vi.mock('../services/api', () => ({
     executeCommand: vi.fn(),
     downloadBackendZip: vi.fn(),
     sendAssistantPrompt: vi.fn(),
+    exportXmi: vi.fn(),
+    importXmi: vi.fn(),
+    importNewDiagramXmi: vi.fn(),
   },
 }));
 
@@ -154,6 +157,62 @@ describe('useDiagramStore', () => {
     expect(state.currentDocument?.version).toBe(3);
     expect(state.nodes.length).toBe(2);
     expect(state.nodes.find((n) => n.id === 'c-3')).toBeDefined();
+  });
+
+  it('exports active diagram to Enterprise Architect XMI format', async () => {
+    useDiagramStore.setState({ currentDocument: sampleDoc });
+    vi.mocked(api.exportXmi).mockResolvedValue();
+
+    await useDiagramStore.getState().exportXmi();
+
+    expect(api.exportXmi).toHaveBeenCalledWith('diag-1', 'Peluqueria');
+    expect(useDiagramStore.getState().isExportingXmi).toBe(false);
+  });
+
+  it('imports XMI into current diagram and updates nodes and edges', async () => {
+    useDiagramStore.setState({ currentDocument: sampleDoc });
+    const importedDoc: CanonicalUmlDocument = {
+      ...sampleDoc,
+      version: 2,
+      classes: [
+        {
+          id: 'c-imported',
+          name: 'Habitacion',
+          position: { x: 250, y: 100 },
+          attributes: [],
+          is_abstract: false,
+        },
+      ],
+      relationships: [],
+    };
+    vi.mocked(api.importXmi).mockResolvedValue(importedDoc);
+
+    const mockFile = new File(['<xmi:XMI></xmi:XMI>'], 'model.xmi', { type: 'application/xml' });
+    await useDiagramStore.getState().importXmi(mockFile);
+
+    expect(api.importXmi).toHaveBeenCalledWith('diag-1', mockFile);
+    const state = useDiagramStore.getState();
+    expect(state.currentDocument?.classes[0].name).toBe('Habitacion');
+    expect(state.nodes[0].id).toBe('c-imported');
+    expect(state.isImportingXmi).toBe(false);
+  });
+
+  it('imports XMI to create a new diagram', async () => {
+    const newDoc: CanonicalUmlDocument = {
+      ...sampleDoc,
+      id: 'diag-imported-new',
+      name: 'Hotel Enterprise',
+      version: 1,
+    };
+    vi.mocked(api.importNewDiagramXmi).mockResolvedValue(newDoc);
+
+    const mockFile = new File(['<xmi:XMI></xmi:XMI>'], 'hotel.xmi', { type: 'application/xml' });
+    await useDiagramStore.getState().importNewDiagramXmi(mockFile, 'Hotel Enterprise');
+
+    expect(api.importNewDiagramXmi).toHaveBeenCalledWith(mockFile, 'Hotel Enterprise');
+    const state = useDiagramStore.getState();
+    expect(state.currentDocument?.id).toBe('diag-imported-new');
+    expect(state.diagramsList[0].id).toBe('diag-imported-new');
   });
 });
 
