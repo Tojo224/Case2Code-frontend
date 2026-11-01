@@ -43,6 +43,7 @@ export const UserMenu: React.FC = () => {
   return (
     <div className="relative" ref={menuRef}>
       <button
+        data-tour="user-menu"
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 pl-1.5 pr-2.5 py-1 rounded-full bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-colors shadow-2xs"
         title="Perfil de usuario"

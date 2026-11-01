@@ -59,7 +59,7 @@ export const DiagramCanvas: React.FC = () => {
   };
 
   return (
-    <div className={`w-full h-full relative bg-slate-50 dark:bg-slate-950 transition-colors ${activeRelationType ? 'cursor-crosshair' : ''}`}>
+    <div data-tour="canvas" className={`w-full h-full relative bg-slate-50 dark:bg-slate-950 transition-colors ${activeRelationType ? 'cursor-crosshair' : ''}`}>
       <ReactFlow
         onInit={setRfInstance}
         nodes={nodes}

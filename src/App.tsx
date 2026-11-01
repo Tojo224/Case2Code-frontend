@@ -59,6 +59,7 @@ export const App: React.FC = () => {
               Crea tu primer proyecto para comenzar a diseñar tus diagramas UML en tu espacio privado.
             </p>
             <button
+              data-tour="empty-create-project"
               onClick={() => createDiagram('Mi Primer Diagrama', 'Proyecto personal')}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-lg shadow-sm transition-colors cursor-pointer"
             >

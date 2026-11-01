@@ -38,7 +38,7 @@ In: `src/` of this frontend repo only. Out: backend, docs repo, i18n.
 ## Tasks
 - [x] T1 deps + `useTourStore` (start/stop/step/completed, localStorage) + vitest for the store
 - [x] T2 tour steps definition + `TourController` component + dark-mode/z-index theming CSS
-- [ ] T3 `data-tour` anchors on Navbar/Sidebar/Canvas/Modals; lift sidebar collapse state into a store
+- [x] T3 `data-tour` anchors on Navbar/Sidebar/Canvas/Modals; lift sidebar collapse state into a store
 - [ ] T4 help entry (Navbar next to ThemeToggle) + auto-start for first-time users after login
 - [ ] T5 contextual tips for advanced features (N:M junction table, XMI, Pair Dev)
 
@@ -55,7 +55,8 @@ In: `src/` of this frontend repo only. Out: backend, docs repo, i18n.
 ## Progress / evidence
 (commit ids and observed results per task; a commit's hash is recorded in the next commit since a commit cannot contain its own hash)
 - T1 34789d1: driver.js 1.10.2 (exact pin), useTourStore + 6 vitest tests. test: 3 files / 16 tests passed; build: OK (only pre-existing chunk-size warning).
-- T2 (hash: see T3 entry): tourSteps.ts (17 steps, 18 w/o project), tourRunner.ts (driver.js wiring, store-driven auto-advance, Next fallbacks), TourController + TourWelcome, theming CSS in src/index.css, isSidebarCollapsed/setSidebarCollapsed added to useDiagramStore (state only; Sidebar wiring is T3), 5 step tests. test: 4 files / 21 tests passed; build: OK. Browser behaviour NOT verified (no backend to log in).
+- T2 cb42dee: tourSteps.ts (17 steps, 18 w/o project), tourRunner.ts (driver.js wiring, store-driven auto-advance, Next fallbacks), TourController + TourWelcome, theming CSS in src/index.css, isSidebarCollapsed/setSidebarCollapsed added to useDiagramStore (state only; Sidebar wiring is T3), 5 step tests. test: 4 files / 21 tests passed; build: OK. Browser behaviour NOT verified (no backend to log in).
+- T3 (hash: see T4 entry): data-tour anchors (navbar-project-select/new-diagram/add-class/ai/springboot/xmi/share, theme-toggle, user-menu, sidebar, sidebar-tool-<TYPE> (POINTER for select), canvas, class-node, empty-create-project, create-class-name/attributes/submit, relationship-modal/save); RelationshipSidebar collapse now read from useDiagramStore (isSidebarCollapsed/setSidebarCollapsed), responsive init and <768 auto-collapse kept. test: 4 files / 21 passed; build OK.
 
 ## Next step
-T3.
+T4.

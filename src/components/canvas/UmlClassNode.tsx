@@ -155,6 +155,7 @@ export const UmlClassNode = memo(({ data, selected }: NodeProps & { data: UmlCla
 
   return (
     <div
+      data-tour="class-node"
       onClick={() => setSelectedClass(data)}
       className={`group/node min-w-[230px] max-w-[320px] bg-white dark:bg-slate-900 rounded-lg shadow-md border-2 transition-all duration-150 relative ${
         selected

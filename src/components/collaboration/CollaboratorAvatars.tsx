@@ -70,6 +70,7 @@ export const CollaboratorAvatars: React.FC = () => {
 
       {/* Share / Invite Button */}
       <button
+        data-tour="navbar-share"
         onClick={() => setInviteModalOpen(true)}
         className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:text-indigo-800 dark:hover:text-indigo-200 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100/80 dark:hover:bg-indigo-900/60 border border-indigo-200/80 dark:border-indigo-800/80 rounded-full transition-colors shadow-xs ml-1"
         title="Invitar colaboradores al proyecto"

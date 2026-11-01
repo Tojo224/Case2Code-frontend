@@ -103,14 +103,14 @@ const TOOLS: SidebarTool[] = [
 ];
 
 export const RelationshipSidebar: React.FC = () => {
-  const { activeRelationType, setActiveRelationType, junctionConfig, setJunctionConfig } = useDiagramStore();
-  // Auto-collapse on small screens (< 1024px)
-  const [isCollapsed, setIsCollapsed] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return window.innerWidth < 1024;
-    }
-    return false;
-  });
+  const {
+    activeRelationType,
+    setActiveRelationType,
+    junctionConfig,
+    setJunctionConfig,
+    isSidebarCollapsed: isCollapsed,
+    setSidebarCollapsed: setIsCollapsed,
+  } = useDiagramStore();
   const [hoveredTool, setHoveredTool] = useState<SidebarTool | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ top: number }>({ top: 0 });
 
@@ -148,6 +148,7 @@ export const RelationshipSidebar: React.FC = () => {
 
   return (
     <aside
+      data-tour="sidebar"
       className={`relative z-20 flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-md select-none transition-all duration-200 ${
         isCollapsed ? 'w-12' : 'w-56'
       }`}
@@ -190,6 +191,7 @@ export const RelationshipSidebar: React.FC = () => {
 
               <button
                 type="button"
+                data-tour={`sidebar-tool-${tool.type ?? 'POINTER'}`}
                 onClick={() => setActiveRelationType(isPointer ? null : (isActive ? null : tool.type))}
                 onMouseEnter={(e) => handleMouseEnter(tool, e)}
                 onMouseLeave={handleMouseLeave}

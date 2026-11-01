@@ -88,6 +88,7 @@ export const Navbar: React.FC = () => {
           {/* Diagram Selector */}
           <div className="flex items-center space-x-1 sm:space-x-2 min-w-0">
             <select
+              data-tour="navbar-project-select"
               value={currentDocument?.id || ''}
               onChange={(e) => loadDiagram(e.target.value)}
               className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1.5 font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/80 transition focus:outline-none focus:ring-1 focus:ring-sky-500 max-w-[110px] sm:max-w-[180px] md:max-w-[220px] truncate"
@@ -100,6 +101,7 @@ export const Navbar: React.FC = () => {
             </select>
 
             <button
+              data-tour="navbar-new-diagram"
               onClick={() => setIsCreatingDiag(true)}
               title="Create new diagram"
               className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition shrink-0"
@@ -112,6 +114,7 @@ export const Navbar: React.FC = () => {
         {/* Action Controls */}
         <div className="flex items-center space-x-1.5 sm:space-x-2.5 shrink-0">
           <button
+            data-tour="navbar-add-class"
             onClick={handleAddClass}
             title="Agregar Clase"
             className="flex items-center space-x-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-md shadow-sm transition"
@@ -121,6 +124,7 @@ export const Navbar: React.FC = () => {
           </button>
 
           <button
+            data-tour="navbar-ai"
             onClick={toggleAssistant}
             title="Senior AI Colleague & Chat de Equipo"
             className={`flex items-center space-x-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-md shadow-sm transition border ${
@@ -134,6 +138,7 @@ export const Navbar: React.FC = () => {
           </button>
 
           <button
+            data-tour="navbar-springboot"
             onClick={() => generateBackend(false)}
             disabled={isGenerating || !currentDocument || currentDocument.classes.length === 0}
             title="Generar Backend Spring Boot"
@@ -148,7 +153,10 @@ export const Navbar: React.FC = () => {
           </button>
 
           {/* Enterprise Architect XMI Interchange Controls */}
-          <div className="flex items-center space-x-1 border border-slate-200 dark:border-slate-700 rounded-md p-0.5 bg-slate-50 dark:bg-slate-800/80">
+          <div
+            data-tour="navbar-xmi"
+            className="flex items-center space-x-1 border border-slate-200 dark:border-slate-700 rounded-md p-0.5 bg-slate-50 dark:bg-slate-800/80"
+          >
             <button
               onClick={exportXmi}
               disabled={isExportingXmi || !currentDocument || currentDocument.classes.length === 0}
