@@ -59,5 +59,11 @@ In: `src/` of this frontend repo only. Out: backend, docs repo, i18n.
 - T3 16f704e: data-tour anchors (navbar-project-select/new-diagram/add-class/ai/springboot/xmi/share, theme-toggle, user-menu, sidebar, sidebar-tool-<TYPE> (POINTER for select), canvas, class-node, empty-create-project, create-class-name/attributes/submit, relationship-modal/save); RelationshipSidebar collapse now read from useDiagramStore (isSidebarCollapsed/setSidebarCollapsed), responsive init and <768 auto-collapse kept. test: 4 files / 21 passed; build OK.
 - T4 6842743: help button (HelpCircle, data-tour=help-button, only when logged in) in Navbar next to ThemeToggle, "Ver tutorial" in UserMenu, src/tour/offerWelcome.ts called after fetchDiagrams in App init and after login/register in AuthModal (silent when logged out, auth modal open, load error, completed/skipped, or already active); 6 tests. test: 5 files / 27 passed; build OK. Browser behaviour NOT verified (needs backend login).
 
+- Route: T1-T4 delegated (one writer; mapping trigger + writer trigger, 25 files). Orchestrator re-ran `npm run test` (5 files / 27 passed) and `npm run build` (OK) on the branch.
+- Native review (range main..f9b4be7, tier high via AuthModal.tsx, consent granted by user): approved, acknowledged, authority burned. Non-blocking advisories, to handle later:
+  - R3 WARNING `tourSteps.ts:150-190`: possible dead-end on the class-node step.
+  - R3 WARNING `tourRunner.ts:15-172`: runner has no unit tests.
+  - R2 SUGGESTION: duplicate finish/skip in `useTourStore.ts:58-66`; runner mutates driver config (`tourRunner.ts:42-50`); hardcoded ids in `tourSteps.test.ts:44-51`.
+
 ## Next step
-T5 (contextual tips) not started; manual browser verification of the tour pending.
+Manual browser verification of the tour (needs backend at 127.0.0.1:8000), then decide on advisories and T5 (contextual tips). Push / PR are the user's call.
