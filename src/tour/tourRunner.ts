@@ -153,6 +153,19 @@ export const runTour = (): (() => void) => {
   };
   window.addEventListener('keyup', onKeyUp);
 
+  // The popover steals focus from the class modal, so its own Ctrl+Enter handler never
+  // sees the keystroke. Forward it to the submit button, but only when the event comes
+  // from the popover (inside the modal, its own handler already submits).
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey)) return;
+    if (!(e.target instanceof Element) || !e.target.closest('.driver-popover')) return;
+    const submit = document.querySelector<HTMLElement>(tourSelector('create-class-submit'));
+    if (!submit) return;
+    e.preventDefault();
+    submit.click();
+  };
+  window.addEventListener('keydown', onKeyDown);
+
   const unsubscribe = useDiagramStore.subscribe(scheduleAutoAdvance);
 
   drv.drive(0);
@@ -162,6 +175,7 @@ export const runTour = (): (() => void) => {
     window.clearTimeout(advanceTimer);
     window.clearTimeout(layoutTimer);
     window.removeEventListener('keyup', onKeyUp);
+    window.removeEventListener('keydown', onKeyDown);
     unsubscribe();
     try {
       drv.destroy();

@@ -4,6 +4,7 @@ import { buildTourSteps, type TourSnapshot } from './tourSteps';
 const snap = (overrides: Partial<TourSnapshot> = {}): TourSnapshot => ({
   hasDocument: true,
   classCount: 0,
+  relationshipCount: 0,
   isCreateClassModalOpen: false,
   hasEditingRelationship: false,
   activeRelationType: null,
@@ -39,12 +40,27 @@ describe('buildTourSteps', () => {
     expect(submit.done!(snap({ classCount: 2 }), base)).toBe(true);
   });
 
+  it('advances after connecting (a relationship is created, no modal opens) and then offers to edit it', () => {
+    const steps = buildTourSteps(true);
+    const drag = steps.find((s) => s.id === 'relation-drag')!;
+    const base = snap({ relationshipCount: 0 });
+    expect(drag.done!(snap({ relationshipCount: 0 }), base)).toBe(false);
+    expect(drag.done!(snap({ relationshipCount: 1 }), base)).toBe(true);
+
+    const ids = steps.map((s) => s.id);
+    expect(ids.indexOf('relation-edit')).toBe(ids.indexOf('relation-drag') + 1);
+    const edit = steps.find((s) => s.id === 'relation-edit')!;
+    expect(edit.target).toBe('relation-edge');
+    expect(edit.done!(snap({ hasEditingRelationship: true }), base)).toBe(true);
+    expect(edit.onSkipTask).toBeTypeOf('function');
+  });
+
   it('every task step has a fallback so Next never dead-ends', () => {
     const steps = buildTourSteps(false);
     for (const s of steps) {
       if (s.done && s.interactive) {
         // Steps whose modal is opened by the tour need onSkipTask; pure observation steps may omit it.
-        const needsFallback = ['create-project', 'add-class', 'second-class', 'relation-tool'].includes(s.id);
+        const needsFallback = ['create-project', 'add-class', 'second-class', 'relation-tool', 'relation-edit'].includes(s.id);
         if (needsFallback) expect(s.onSkipTask).toBeTypeOf('function');
       }
     }

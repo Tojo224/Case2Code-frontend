@@ -65,5 +65,13 @@ In: `src/` of this frontend repo only. Out: backend, docs repo, i18n.
   - R3 WARNING `tourRunner.ts:15-172`: runner has no unit tests.
   - R2 SUGGESTION: duplicate finish/skip in `useTourStore.ts:58-66`; runner mutates driver config (`tourRunner.ts:42-50`); hardcoded ids in `tourSteps.test.ts:44-51`.
 
+- Browser verification (local backend with temp SQLite + vite over HTTP; test account on localhost) found 3 defects, fixed in the T4b commit:
+  - Canvas dead while highlighted: driver.js forces `pointer-events: auto` on descendants and the LiveCursors overlay (`pointer-events-none`) swallowed double-click and connect-drag. Fix: CSS override now covers `.pointer-events-none` (src/index.css). Verified: double-click opens the class modal during the tour.
+  - Ctrl+Enter dead in the class modal while the tour is active (popover steals focus outside the modal's onKeyDown). Fix: keydown listener in tourRunner forwarding to the submit button only when the event comes from the popover. Verified: single class created, tour advanced.
+  - Wrong assumption (my mapping): dragging a connection creates the relationship immediately; RelationshipModal opens only by editing the edge. Fix: `relationshipCount` in the snapshot, `relation-drag` is done when a relationship is created, new step `relation-edit` targeting the edge label (`data-tour="relation-edge"`), Next opens the editor as fallback. The tour now has 18 steps when a project already exists (19 when it must create one first). Verified in the browser through the finish step; the real double-click on the edge label was not exercised because test classes were stacked and covered the label.
+  - Copy: step "Sumá una segunda clase" now says to double-click away from the first class.
+  - Checks after fix: `npm run test` 5 files / 28 passed; `npm run build` OK.
+- Known, not fixed: an interrupted tour offers the welcome again on every reload (only finish/skip persists); popover can partially cover the connection-mode pill / part of the relationship modal on 1024px.
+
 ## Next step
-Manual browser verification of the tour (needs backend at 127.0.0.1:8000), then decide on advisories and T5 (contextual tips). Push / PR are the user's call.
+Decide on the review advisories and T5 (contextual tips). Light-mode and small-width checks still pending. Push / PR are the user's call.

@@ -215,6 +215,7 @@ export const UmlRelationshipEdge = memo(({
             if (data) setEditingRelationship(data);
           }}
           title="Doble clic para editar relación"
+          data-tour="relation-edge"
           className="nodrag nopan group flex items-center space-x-1.5 bg-white/95 dark:bg-slate-800/95 px-2.5 py-1 rounded-full border border-slate-300 dark:border-slate-700 shadow-md text-[11px] font-mono font-semibold text-slate-700 dark:text-slate-200 hover:border-indigo-400 dark:hover:border-indigo-500 transition cursor-pointer select-none"
         >
           <span>{getRelationshipBadge()}</span>

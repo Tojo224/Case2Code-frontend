@@ -5,6 +5,7 @@ import type { RelationshipType } from '../types/uml';
 export interface TourSnapshot {
   hasDocument: boolean;
   classCount: number;
+  relationshipCount: number;
   isCreateClassModalOpen: boolean;
   hasEditingRelationship: boolean;
   activeRelationType: RelationshipType | null;
@@ -15,6 +16,7 @@ export const takeSnapshot = (): TourSnapshot => {
   return {
     hasDocument: !!s.currentDocument,
     classCount: s.currentDocument?.classes.length ?? 0,
+    relationshipCount: s.currentDocument?.relationships.length ?? 0,
     isCreateClassModalOpen: s.isCreateClassModalOpen,
     hasEditingRelationship: !!s.editingRelationship,
     activeRelationType: s.activeRelationType,
@@ -174,7 +176,8 @@ export const buildTourSteps = (hasDocument: boolean): TourStepDef[] => {
       title: 'Sumá una segunda clase',
       description:
         'Para relacionar clases necesitás al menos dos. Hacé <strong>doble clic en un espacio vacío</strong> ' +
-        'del lienzo para abrir el formulario (por ejemplo <strong>Pedido</strong>).',
+        'del lienzo, lejos de la primera clase (por ejemplo arriba a la izquierda), para abrir el formulario ' +
+        '(por ejemplo <strong>Pedido</strong>).',
       side: 'top',
       align: 'center',
       interactive: true,
@@ -236,8 +239,28 @@ export const buildTourSteps = (hasDocument: boolean): TourStepDef[] => {
       side: 'top',
       align: 'center',
       interactive: true,
-      done: (snap) => snap.hasEditingRelationship,
+      done: (snap, base) => snap.relationshipCount > base.relationshipCount,
       onBack: () => diagram().setActiveRelationType(null),
+    },
+    {
+      // Connecting creates the relationship right away; the edit modal only opens from the edge label.
+      id: 'relation-edit',
+      target: 'relation-edge',
+      title: '¡Ya está relacionada!',
+      description:
+        'La línea une las dos clases y su etiqueta muestra la cardinalidad (por ejemplo <strong>1 : N</strong>). ' +
+        'Hacé <strong>doble clic en la etiqueta</strong> para ajustar el tipo, la cardinalidad y los roles.',
+      side: 'top',
+      align: 'center',
+      interactive: true,
+      wait: true,
+      optional: true,
+      done: (snap) => snap.hasEditingRelationship,
+      onEnter: () => diagram().setActiveRelationType(null),
+      onSkipTask: () => {
+        const rel = diagram().currentDocument?.relationships[0];
+        if (rel) diagram().setEditingRelationship(rel);
+      },
     },
     {
       id: 'relation-modal',
