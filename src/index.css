@@ -11,3 +11,206 @@ html, body, #root {
   user-select: none;
 }
 
+
+/* ------------------------------------------------------------------ */
+/* Guided tour (driver.js) theming. Light by default, `.dark` on <html> */
+/* ------------------------------------------------------------------ */
+.driver-overlay {
+  z-index: 9999 !important;
+}
+
+.driver-popover.c2c-tour {
+  z-index: 10001;
+  box-sizing: border-box;
+  min-width: 260px;
+  max-width: min(340px, calc(100vw - 32px));
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #0f172a;
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  box-shadow: 0 20px 45px -12px rgba(15, 23, 42, 0.45);
+}
+
+.driver-popover.c2c-tour .driver-popover-title {
+  padding-right: 24px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.driver-popover.c2c-tour .driver-popover-description {
+  font-size: 13px;
+  line-height: 1.55;
+  color: #475569;
+}
+
+.driver-popover.c2c-tour .driver-popover-description kbd {
+  padding: 0 4px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #f1f5f9;
+  font-size: 11px;
+}
+
+.driver-popover.c2c-tour .driver-popover-progress-text {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.driver-popover.c2c-tour .driver-popover-close-btn {
+  color: #94a3b8;
+}
+
+.driver-popover.c2c-tour .driver-popover-close-btn:hover,
+.driver-popover.c2c-tour .driver-popover-close-btn:focus-visible {
+  color: #0f172a;
+}
+
+.driver-popover.c2c-tour .driver-popover-footer-btn {
+  padding: 6px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.driver-popover.c2c-tour .driver-popover-footer-btn:hover,
+.driver-popover.c2c-tour .driver-popover-footer-btn:focus-visible {
+  background: #f1f5f9;
+}
+
+.driver-popover.c2c-tour .driver-popover-next-btn {
+  border-color: #4f46e5;
+  background: #4f46e5;
+  color: #ffffff;
+}
+
+.driver-popover.c2c-tour .driver-popover-next-btn:hover,
+.driver-popover.c2c-tour .driver-popover-next-btn:focus-visible {
+  background: #4338ca;
+}
+
+.driver-popover.c2c-tour .c2c-tour-skip {
+  all: unset;
+  display: block;
+  margin: 10px auto 0;
+  cursor: pointer;
+  font-size: 11px;
+  text-align: center;
+  text-decoration: underline;
+  color: #64748b;
+}
+
+.driver-popover.c2c-tour .c2c-tour-skip:hover,
+.driver-popover.c2c-tour .c2c-tour-skip:focus-visible {
+  color: #0f172a;
+}
+
+.dark .driver-popover.c2c-tour {
+  border-color: #334155;
+  background: #0f172a;
+  color: #f1f5f9;
+  box-shadow: 0 20px 45px -12px rgba(0, 0, 0, 0.7);
+}
+
+.dark .driver-popover.c2c-tour .driver-popover-title {
+  color: #f1f5f9;
+}
+
+.dark .driver-popover.c2c-tour .driver-popover-description {
+  color: #cbd5e1;
+}
+
+.dark .driver-popover.c2c-tour .driver-popover-description kbd {
+  border-color: #475569;
+  background: #1e293b;
+  color: #e2e8f0;
+}
+
+.dark .driver-popover.c2c-tour .driver-popover-progress-text {
+  color: #94a3b8;
+}
+
+.dark .driver-popover.c2c-tour .driver-popover-close-btn {
+  color: #64748b;
+}
+
+.dark .driver-popover.c2c-tour .driver-popover-close-btn:hover,
+.dark .driver-popover.c2c-tour .driver-popover-close-btn:focus-visible {
+  color: #f1f5f9;
+}
+
+.dark .driver-popover.c2c-tour .driver-popover-footer-btn {
+  border-color: #475569;
+  background: #1e293b;
+  color: #e2e8f0;
+}
+
+.dark .driver-popover.c2c-tour .driver-popover-footer-btn:hover,
+.dark .driver-popover.c2c-tour .driver-popover-footer-btn:focus-visible {
+  background: #334155;
+}
+
+.dark .driver-popover.c2c-tour .driver-popover-next-btn {
+  border-color: #6366f1;
+  background: #6366f1;
+  color: #ffffff;
+}
+
+.dark .driver-popover.c2c-tour .driver-popover-next-btn:hover,
+.dark .driver-popover.c2c-tour .driver-popover-next-btn:focus-visible {
+  background: #818cf8;
+}
+
+.dark .driver-popover.c2c-tour .c2c-tour-skip {
+  color: #94a3b8;
+}
+
+.dark .driver-popover.c2c-tour .c2c-tour-skip:hover,
+.dark .driver-popover.c2c-tour .c2c-tour-skip:focus-visible {
+  color: #f1f5f9;
+}
+
+.dark .driver-popover.c2c-tour .driver-popover-arrow {
+  border-color: #0f172a;
+}
+
+.dark .driver-popover.c2c-tour .driver-popover-arrow-side-left {
+  border-top-color: transparent;
+  border-bottom-color: transparent;
+  border-right-color: transparent;
+}
+
+.dark .driver-popover.c2c-tour .driver-popover-arrow-side-right {
+  border-top-color: transparent;
+  border-bottom-color: transparent;
+  border-left-color: transparent;
+}
+
+.dark .driver-popover.c2c-tour .driver-popover-arrow-side-top {
+  border-bottom-color: transparent;
+  border-left-color: transparent;
+  border-right-color: transparent;
+}
+
+.dark .driver-popover.c2c-tour .driver-popover-arrow-side-bottom {
+  border-top-color: transparent;
+  border-left-color: transparent;
+  border-right-color: transparent;
+}
+
+/*
+ * driver.js forces `pointer-events: auto` on every descendant of the highlighted
+ * element. Restore React Flow's click-through layers so the canvas keeps working
+ * while it is the active element.
+ */
+.driver-active .driver-active-element .react-flow__nodes,
+.driver-active .driver-active-element .react-flow__edges,
+.driver-active .driver-active-element .react-flow__edgelabel-renderer,
+.driver-active .driver-active-element .react-flow__viewport-portal {
+  pointer-events: none;
+}

@@ -10,6 +10,7 @@ import { DiagramCanvas } from './components/canvas/DiagramCanvas';
 import { CaseAssistantChat } from './components/assistant/CaseAssistantChat';
 import { InviteModal } from './components/collaboration/InviteModal';
 import { AuthModal } from './components/auth/AuthModal';
+import { TourController } from './components/tour/TourController';
 
 export const App: React.FC = () => {
   const { fetchDiagrams, currentDocument, createDiagram, isLoading, resetDiagrams } = useDiagramStore();
@@ -78,6 +79,9 @@ export const App: React.FC = () => {
       {/* Global Collaboration & Auth Modals */}
       <InviteModal />
       <AuthModal />
+
+      {/* Guided onboarding tour */}
+      <TourController />
     </div>
   );
 };

@@ -64,6 +64,10 @@ interface DiagramState {
   // AI Assistant
   isAssistantOpen: boolean;
   toggleAssistant: () => void;
+
+  // Relationship sidebar collapse (lifted so the guided tour can expand it)
+  isSidebarCollapsed: boolean;
+  setSidebarCollapsed: (collapsed: boolean) => void;
   sendAssistantPrompt: (
     prompt: string,
     imageData?: { base64: string; mimeType: string }
@@ -587,6 +591,10 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
 
   isAssistantOpen: false,
   toggleAssistant: () => set((state) => ({ isAssistantOpen: !state.isAssistantOpen })),
+
+  // Starts collapsed on small screens (< 1024px), same as the previous local state
+  isSidebarCollapsed: typeof window !== 'undefined' ? window.innerWidth < 1024 : false,
+  setSidebarCollapsed: (collapsed) => set({ isSidebarCollapsed: collapsed }),
 
   sendAssistantPrompt: async (prompt: string, imageData?: { base64: string; mimeType: string }) => {
     const doc = get().currentDocument;
