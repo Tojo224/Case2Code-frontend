@@ -10,10 +10,13 @@ import {
   Bot,
   FileDown,
   FileUp,
+  HelpCircle,
 } from 'lucide-react';
 import { CollaboratorAvatars } from '../collaboration/CollaboratorAvatars';
 import { UserMenu } from '../auth/UserMenu';
 import { ThemeToggle } from './ThemeToggle';
+import { useAuthStore } from '../../store/useAuthStore';
+import { useTourStore } from '../../store/useTourStore';
 
 export const Navbar: React.FC = () => {
   const {
@@ -34,6 +37,9 @@ export const Navbar: React.FC = () => {
     isExportingXmi,
     isImportingXmi,
   } = useDiagramStore();
+
+  const currentUser = useAuthStore((s) => s.currentUser);
+  const restartTour = useTourStore((s) => s.restart);
 
   const [isCreatingDiag, setIsCreatingDiag] = useState(false);
   const [newDiagName, setNewDiagName] = useState('');
@@ -203,6 +209,20 @@ export const Navbar: React.FC = () => {
 
           {/* Dark / Light Theme Toggle (Sun / Moon) */}
           <ThemeToggle />
+
+          {/* Help: replay the guided tour */}
+          {currentUser && (
+            <button
+              type="button"
+              data-tour="help-button"
+              onClick={restartTour}
+              title="Ayuda: ver tutorial"
+              aria-label="Ayuda: ver tutorial"
+              className="p-2 rounded-full text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-sky-300 bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all shadow-2xs flex items-center justify-center cursor-pointer"
+            >
+              <HelpCircle className="w-4 h-4" />
+            </button>
+          )}
 
           {/* User Profile & Demo Switcher */}
           <UserMenu />
