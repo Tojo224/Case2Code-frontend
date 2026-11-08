@@ -195,4 +195,15 @@ export interface AssistantPromptResponse {
   error?: string | null;
 }
 
+export type SqlDialect = 'postgresql' | 'mysql' | 'sqlite' | 'sqlserver';
+
+export interface SqlPreviewResponse {
+  diagram_id: string;
+  diagram_name: string;
+  dialect: SqlDialect;
+  filename: string;
+  sql: string;
+}
+
+
 

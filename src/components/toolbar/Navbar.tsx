@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useDiagramStore } from '../../store/useDiagramStore';
 import {
   Code2,
+  Database,
   Download,
   Plus,
   AlertCircle,
@@ -31,6 +32,7 @@ export const Navbar: React.FC = () => {
     isAssistantOpen,
     toggleAssistant,
     openCreateClassModal,
+    openSqlModal,
     exportXmi,
     importXmi,
     importNewDiagramXmi,
@@ -144,11 +146,22 @@ export const Navbar: React.FC = () => {
           </button>
 
           <button
+            data-tour="navbar-sql"
+            onClick={openSqlModal}
+            disabled={!currentDocument || currentDocument.classes.length === 0}
+            title="Generar y Exportar Script SQL (PostgreSQL, MySQL, SQLite, SQL Server)"
+            className="flex items-center space-x-1.5 bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-500 disabled:opacity-50 text-white text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-md shadow-sm transition cursor-pointer"
+          >
+            <Database className="w-3.5 h-3.5 shrink-0" />
+            <span className="hidden sm:inline">SQL</span>
+          </button>
+
+          <button
             data-tour="navbar-springboot"
             onClick={() => generateBackend(false)}
             disabled={isGenerating || !currentDocument || currentDocument.classes.length === 0}
             title="Generar Backend Spring Boot"
-            className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold px-2.5 sm:px-3.5 py-1.5 rounded-md shadow-sm transition"
+            className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold px-2.5 sm:px-3.5 py-1.5 rounded-md shadow-sm transition cursor-pointer"
           >
             {isGenerating ? (
               <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />

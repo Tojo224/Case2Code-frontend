@@ -14,6 +14,8 @@ vi.mock('../services/api', () => ({
     exportXmi: vi.fn(),
     importXmi: vi.fn(),
     importNewDiagramXmi: vi.fn(),
+    getSqlPreview: vi.fn(),
+    exportSql: vi.fn(),
   },
 }));
 
@@ -213,6 +215,14 @@ describe('useDiagramStore', () => {
     const state = useDiagramStore.getState();
     expect(state.currentDocument?.id).toBe('diag-imported-new');
     expect(state.diagramsList[0].id).toBe('diag-imported-new');
+  });
+
+  it('opens and closes the SQL generator and exporter modal', () => {
+    expect(useDiagramStore.getState().isSqlModalOpen).toBe(false);
+    useDiagramStore.getState().openSqlModal();
+    expect(useDiagramStore.getState().isSqlModalOpen).toBe(true);
+    useDiagramStore.getState().closeSqlModal();
+    expect(useDiagramStore.getState().isSqlModalOpen).toBe(false);
   });
 });
 

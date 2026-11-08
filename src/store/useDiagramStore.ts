@@ -30,6 +30,7 @@ interface DiagramState {
   junctionConfig: { auto: boolean; name: string };
   isCreateClassModalOpen: boolean;
   createClassInitialPosition: { x: number; y: number } | null;
+  isSqlModalOpen: boolean;
 
   // Actions
   fetchDiagrams: () => Promise<void>;
@@ -40,6 +41,8 @@ interface DiagramState {
   setActiveRelationType: (type: RelationshipType | null) => void;
   openCreateClassModal: (position?: { x: number; y: number }) => void;
   closeCreateClassModal: () => void;
+  openSqlModal: () => void;
+  closeSqlModal: () => void;
   
   // Canvas events
   onNodesChange: OnNodesChange;
@@ -197,6 +200,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
   junctionConfig: { auto: true, name: '' },
   isCreateClassModalOpen: false,
   createClassInitialPosition: null,
+  isSqlModalOpen: false,
 
   fetchDiagrams: async () => {
     try {
@@ -517,6 +521,8 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       isCreateClassModalOpen: false,
       createClassInitialPosition: null,
     }),
+  openSqlModal: () => set({ isSqlModalOpen: true }),
+  closeSqlModal: () => set({ isSqlModalOpen: false }),
 
   generateBackend: async (verify = false) => {
     const doc = get().currentDocument;

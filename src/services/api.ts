@@ -2,6 +2,8 @@ import {
   AssistantPromptResponse,
   CanonicalUmlDocument,
   CommandExecutionResponse,
+  SqlDialect,
+  SqlPreviewResponse,
   UmlCommand,
 } from '../types/uml';
 import { AiProviderStatus, ChatHistoryResponse, ProjectCollaborator } from '../types/collaboration';
@@ -75,6 +77,41 @@ export const api = {
     const a = document.createElement('a');
     a.href = downloadUrl;
     a.download = `case2code-backend-${diagramId}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(downloadUrl);
+  },
+
+  async getSqlPreview(diagramId: string, dialect: SqlDialect = 'postgresql'): Promise<SqlPreviewResponse> {
+    const url = `${BASE_URL}/diagrams/${diagramId}/sql?dialect=${encodeURIComponent(dialect)}`;
+    const res = await fetch(url, {
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Failed to generate SQL preview' }));
+      throw new Error(err.detail || 'Failed to generate SQL preview');
+    }
+    return res.json();
+  },
+
+  async exportSql(diagramId: string, dialect: SqlDialect = 'postgresql', diagramName?: string): Promise<void> {
+    const url = `${BASE_URL}/diagrams/${diagramId}/export/sql?dialect=${encodeURIComponent(dialect)}`;
+    const token = localStorage.getItem('case2code_token');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'SQL export failed' }));
+      throw new Error(err.detail || 'SQL export failed');
+    }
+    const blob = await res.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    const safeName = (diagramName || `schema-${diagramId}`).replace(/[^a-zA-Z0-9_\-]/g, '_');
+    a.download = `${safeName}_${dialect}.sql`;
     document.body.appendChild(a);
     a.click();
     a.remove();

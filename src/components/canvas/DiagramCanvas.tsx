@@ -16,6 +16,7 @@ import { UmlClassNode } from './UmlClassNode';
 import { UmlRelationshipEdge } from './UmlRelationshipEdge';
 import { RelationshipModal } from '../modals/RelationshipModal';
 import { CreateClassModal } from '../modals/CreateClassModal';
+import { SqlPreviewModal } from '../modals/SqlPreviewModal';
 import { LiveCursors } from '../collaboration/LiveCursors';
 
 export const DiagramCanvas: React.FC = () => {
@@ -111,6 +112,9 @@ export const DiagramCanvas: React.FC = () => {
 
       {/* Class Creation Modal */}
       <CreateClassModal />
+
+      {/* SQL Code Preview & Multi-Dialect Exporter Modal */}
+      <SqlPreviewModal />
     </div>
   );
 };
