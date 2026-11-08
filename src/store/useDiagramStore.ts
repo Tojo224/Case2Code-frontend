@@ -20,6 +20,7 @@ interface DiagramState {
   edges: Edge[];
   isLoading: boolean;
   isGenerating: boolean;
+  isGeneratingMobile: boolean;
   error: string | null;
 
   // Selected elements for inspectors/modals
@@ -56,6 +57,7 @@ interface DiagramState {
   setJunctionConfig: (config: { auto: boolean; name: string }) => void;
   clearError: () => void;
   generateBackend: (verify?: boolean) => Promise<void>;
+  generateMobileApp: () => Promise<void>;
 
   // Enterprise Architect XMI Interchange
   isExportingXmi: boolean;
@@ -192,6 +194,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
   edges: [],
   isLoading: false,
   isGenerating: false,
+  isGeneratingMobile: false,
   error: null,
   selectedClass: null,
   pendingConnection: null,
@@ -534,6 +537,19 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       set({ isGenerating: false });
     } catch (e: any) {
       set({ error: e.message, isGenerating: false });
+    }
+  },
+
+  generateMobileApp: async () => {
+    const doc = get().currentDocument;
+    if (!doc) return;
+
+    try {
+      set({ isGeneratingMobile: true, error: null });
+      await api.downloadMobileAppZip(doc.id, doc.name);
+      set({ isGeneratingMobile: false });
+    } catch (e: any) {
+      set({ error: e.message, isGeneratingMobile: false });
     }
   },
 

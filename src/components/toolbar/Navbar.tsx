@@ -4,6 +4,7 @@ import {
   Code2,
   Database,
   Download,
+  Smartphone,
   Plus,
   AlertCircle,
   RefreshCw,
@@ -26,7 +27,9 @@ export const Navbar: React.FC = () => {
     createDiagram,
     loadDiagram,
     generateBackend,
+    generateMobileApp,
     isGenerating,
+    isGeneratingMobile,
     error,
     clearError,
     isAssistantOpen,
@@ -169,6 +172,21 @@ export const Navbar: React.FC = () => {
               <Download className="w-3.5 h-3.5 shrink-0" />
             )}
             <span className="hidden sm:inline">{isGenerating ? 'Generando...' : 'Spring Boot'}</span>
+          </button>
+
+          <button
+            data-tour="navbar-flutter"
+            onClick={generateMobileApp}
+            disabled={isGeneratingMobile || !currentDocument || currentDocument.classes.length === 0}
+            title="Generar App Móvil Genérica (Flutter Material 3)"
+            className="flex items-center space-x-1.5 bg-cyan-600 hover:bg-cyan-700 dark:bg-cyan-600 dark:hover:bg-cyan-500 disabled:opacity-50 text-white text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-md shadow-sm transition cursor-pointer"
+          >
+            {isGeneratingMobile ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
+            ) : (
+              <Smartphone className="w-3.5 h-3.5 shrink-0" />
+            )}
+            <span className="hidden md:inline">{isGeneratingMobile ? 'Generando...' : 'Flutter App'}</span>
           </button>
 
           {/* Enterprise Architect XMI Interchange Controls */}

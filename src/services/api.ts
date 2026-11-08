@@ -83,6 +83,29 @@ export const api = {
     window.URL.revokeObjectURL(downloadUrl);
   },
 
+  async downloadMobileAppZip(diagramId: string, diagramName?: string): Promise<void> {
+    const url = `${BASE_URL}/diagrams/${diagramId}/generate/mobile`;
+    const token = localStorage.getItem('case2code_token');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(url, { method: 'POST', headers });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Mobile generation failed' }));
+      throw new Error(err.detail || 'Mobile app generation failed');
+    }
+    const blob = await res.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    const safeName = (diagramName || `case2code-${diagramId}`).replace(/[^a-zA-Z0-9_\-]/g, '_');
+    a.download = `${safeName}_flutter_mobile.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(downloadUrl);
+  },
+
   async getSqlPreview(diagramId: string, dialect: SqlDialect = 'postgresql'): Promise<SqlPreviewResponse> {
     const url = `${BASE_URL}/diagrams/${diagramId}/sql?dialect=${encodeURIComponent(dialect)}`;
     const res = await fetch(url, {
