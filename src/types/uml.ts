@@ -24,6 +24,7 @@ export interface UmlAttribute {
   nullable: boolean;
   default_value?: string | null;
   visibility: Visibility;
+  isHologram?: boolean;
   [key: string]: unknown;
 }
 
@@ -34,6 +35,7 @@ export interface UmlClass {
   attributes: UmlAttribute[];
   is_abstract: boolean;
   stereotype?: string | null;
+  isHologram?: boolean;
   [key: string]: unknown;
 }
 
@@ -49,6 +51,7 @@ export interface UmlRelationship {
   target_role?: string | null;
   source_handle?: string | null;
   target_handle?: string | null;
+  isHologram?: boolean;
   [key: string]: unknown;
 }
 

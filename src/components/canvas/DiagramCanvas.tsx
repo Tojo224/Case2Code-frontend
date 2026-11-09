@@ -30,6 +30,10 @@ export const DiagramCanvas: React.FC = () => {
     activeRelationType,
     setActiveRelationType,
     openCreateClassModal,
+    hologramCommands,
+    isApplyingHologram,
+    applyHologram,
+    clearHologram,
   } = useDiagramStore();
   const isDark = useThemeStore((s) => s.isDark);
   const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null);
@@ -92,6 +96,30 @@ export const DiagramCanvas: React.FC = () => {
         />
         <LiveCursors />
       </ReactFlow>
+
+      {/* Floating Hologram Preview Control Bar */}
+      {hologramCommands && hologramCommands.length > 0 && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-4 py-2 bg-cyan-950/90 text-cyan-100 rounded-full shadow-[0_0_24px_rgba(34,211,238,0.35)] backdrop-blur-md text-xs font-medium border border-cyan-400/50 animate-in fade-in">
+          <span>
+            👻 <strong>Holograma Activo</strong> ({hologramCommands.length} sugerencias sin aplicar)
+          </span>
+          <button
+            onClick={() => applyHologram()}
+            disabled={isApplyingHologram}
+            className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold rounded-full transition cursor-pointer shadow-xs"
+          >
+            {isApplyingHologram ? 'Aplicando...' : '✓ Aplicar al Diagrama'}
+          </button>
+          <button
+            onClick={() => clearHologram()}
+            disabled={isApplyingHologram}
+            className="px-2.5 py-1 bg-slate-800 hover:bg-red-900/70 text-slate-300 hover:text-white rounded-full transition cursor-pointer"
+            title="Descartar Holograma"
+          >
+            ✕ Descartar
+          </button>
+        </div>
+      )}
 
       {/* Floating Mode Indicator */}
       {activeRelationType && (

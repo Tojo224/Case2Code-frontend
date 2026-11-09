@@ -78,6 +78,11 @@ class CollaborationClient {
         break;
       case 'CHAT_MESSAGE':
         collab.addChatMessage(msg.message);
+        if (msg.message.suggested_commands && msg.message.suggested_commands.length > 0) {
+          diagram.setHologramCommands(msg.message.suggested_commands);
+        } else if (msg.message.executed_commands && msg.message.executed_commands.length > 0) {
+          diagram.clearHologram();
+        }
         break;
       case 'TYPING_INDICATOR':
         collab.setTypingUser(msg.user_id, msg.user_name, msg.is_typing);

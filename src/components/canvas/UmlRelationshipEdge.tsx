@@ -76,10 +76,11 @@ export const UmlRelationshipEdge = memo(({
   };
 
   const relType = data?.type || 'ONE_TO_MANY';
+  const isHologram = Boolean(data?.isHologram);
 
   // Determine line dash and color
-  const isDashed = relType === 'REALIZATION' || relType === 'DEPENDENCY';
-  const edgeStroke = '#475569';
+  const isDashed = isHologram || relType === 'REALIZATION' || relType === 'DEPENDENCY';
+  const edgeStroke = isHologram ? '#06b6d4' : '#475569';
 
   // SVG Marker IDs
   const markerStartId = relType === 'COMPOSITION'
@@ -212,35 +213,43 @@ export const UmlRelationshipEdge = memo(({
           }}
           onDoubleClick={(e) => {
             e.stopPropagation();
-            if (data) setEditingRelationship(data);
+            if (data && !isHologram) setEditingRelationship(data);
           }}
-          title="Doble clic para editar relación"
+          title={isHologram ? 'Relación sugerida en holograma' : 'Doble clic para editar relación'}
           data-tour="relation-edge"
-          className="nodrag nopan group flex items-center space-x-1.5 bg-white/95 dark:bg-slate-800/95 px-2.5 py-1 rounded-full border border-slate-300 dark:border-slate-700 shadow-md text-[11px] font-mono font-semibold text-slate-700 dark:text-slate-200 hover:border-indigo-400 dark:hover:border-indigo-500 transition cursor-pointer select-none"
+          className={`nodrag nopan group flex items-center space-x-1.5 px-2.5 py-1 rounded-full border shadow-md text-[11px] font-mono font-semibold transition select-none ${
+            isHologram
+              ? 'bg-cyan-50/95 dark:bg-cyan-950/90 border-dashed border-cyan-400 text-cyan-800 dark:text-cyan-200'
+              : 'bg-white/95 dark:bg-slate-800/95 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-indigo-400 dark:hover:border-indigo-500 cursor-pointer'
+          }`}
         >
-          <span>{getRelationshipBadge()}</span>
+          <span>{isHologram ? `👻 ${getRelationshipBadge()}` : getRelationshipBadge()}</span>
           {data?.target_role && (
             <span className="text-[10px] text-slate-400 font-normal italic">
               ({data.target_role})
             </span>
           )}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (data) setEditingRelationship(data);
-            }}
-            title="Editar relación"
-            className="opacity-0 group-hover:opacity-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition text-slate-400 ml-0.5"
-          >
-            <Pencil className="w-3 h-3" />
-          </button>
-          <button
-            onClick={handleDelete}
-            title="Delete relationship"
-            className="opacity-0 group-hover:opacity-100 hover:text-red-500 transition text-slate-400 ml-0.5"
-          >
-            <Trash2 className="w-3 h-3" />
-          </button>
+          {!isHologram && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (data) setEditingRelationship(data);
+                }}
+                title="Editar relación"
+                className="opacity-0 group-hover:opacity-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition text-slate-400 ml-0.5"
+              >
+                <Pencil className="w-3 h-3" />
+              </button>
+              <button
+                onClick={handleDelete}
+                title="Delete relationship"
+                className="opacity-0 group-hover:opacity-100 hover:text-red-500 transition text-slate-400 ml-0.5"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </>
+          )}
         </div>
       </EdgeLabelRenderer>
     </>

@@ -51,6 +51,7 @@ export interface ChatMessage {
   addressed_to?: string | null;
   ai_engine?: string | null;
   executed_commands?: UmlCommand[] | null;
+  suggested_commands?: UmlCommand[] | null;
   applied_commands_count?: number;
   created_at: string;
 }
