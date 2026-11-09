@@ -7,6 +7,7 @@ export const ThemeToggle: React.FC = () => {
 
   return (
     <button
+      data-tour="theme-toggle"
       onClick={toggleTheme}
       type="button"
       title={isDark ? 'Modo Oscuro activo (cambiar a Modo Claro)' : 'Modo Claro activo (cambiar a Modo Oscuro)'}

@@ -2,7 +2,9 @@ import React, { useState, useRef } from 'react';
 import { useDiagramStore } from '../../store/useDiagramStore';
 import {
   Code2,
+  Database,
   Download,
+  Smartphone,
   Plus,
   AlertCircle,
   RefreshCw,
@@ -10,10 +12,13 @@ import {
   Bot,
   FileDown,
   FileUp,
+  HelpCircle,
 } from 'lucide-react';
 import { CollaboratorAvatars } from '../collaboration/CollaboratorAvatars';
 import { UserMenu } from '../auth/UserMenu';
 import { ThemeToggle } from './ThemeToggle';
+import { useAuthStore } from '../../store/useAuthStore';
+import { useTourStore } from '../../store/useTourStore';
 
 export const Navbar: React.FC = () => {
   const {
@@ -22,18 +27,24 @@ export const Navbar: React.FC = () => {
     createDiagram,
     loadDiagram,
     generateBackend,
+    generateMobileApp,
     isGenerating,
+    isGeneratingMobile,
     error,
     clearError,
     isAssistantOpen,
     toggleAssistant,
     openCreateClassModal,
+    openSqlModal,
     exportXmi,
     importXmi,
     importNewDiagramXmi,
     isExportingXmi,
     isImportingXmi,
   } = useDiagramStore();
+
+  const currentUser = useAuthStore((s) => s.currentUser);
+  const restartTour = useTourStore((s) => s.restart);
 
   const [isCreatingDiag, setIsCreatingDiag] = useState(false);
   const [newDiagName, setNewDiagName] = useState('');
@@ -88,6 +99,7 @@ export const Navbar: React.FC = () => {
           {/* Diagram Selector */}
           <div className="flex items-center space-x-1 sm:space-x-2 min-w-0">
             <select
+              data-tour="navbar-project-select"
               value={currentDocument?.id || ''}
               onChange={(e) => loadDiagram(e.target.value)}
               className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1.5 font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/80 transition focus:outline-none focus:ring-1 focus:ring-sky-500 max-w-[110px] sm:max-w-[180px] md:max-w-[220px] truncate"
@@ -100,6 +112,7 @@ export const Navbar: React.FC = () => {
             </select>
 
             <button
+              data-tour="navbar-new-diagram"
               onClick={() => setIsCreatingDiag(true)}
               title="Create new diagram"
               className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition shrink-0"
@@ -112,6 +125,7 @@ export const Navbar: React.FC = () => {
         {/* Action Controls */}
         <div className="flex items-center space-x-1.5 sm:space-x-2.5 shrink-0">
           <button
+            data-tour="navbar-add-class"
             onClick={handleAddClass}
             title="Agregar Clase"
             className="flex items-center space-x-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-md shadow-sm transition"
@@ -121,6 +135,7 @@ export const Navbar: React.FC = () => {
           </button>
 
           <button
+            data-tour="navbar-ai"
             onClick={toggleAssistant}
             title="Senior AI Colleague & Chat de Equipo"
             className={`flex items-center space-x-1.5 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-md shadow-sm transition border ${
@@ -134,10 +149,22 @@ export const Navbar: React.FC = () => {
           </button>
 
           <button
+            data-tour="navbar-sql"
+            onClick={openSqlModal}
+            disabled={!currentDocument || currentDocument.classes.length === 0}
+            title="Generar y Exportar Script SQL (PostgreSQL, MySQL, SQLite, SQL Server)"
+            className="flex items-center space-x-1.5 bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-500 disabled:opacity-50 text-white text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-md shadow-sm transition cursor-pointer"
+          >
+            <Database className="w-3.5 h-3.5 shrink-0" />
+            <span className="hidden sm:inline">SQL</span>
+          </button>
+
+          <button
+            data-tour="navbar-springboot"
             onClick={() => generateBackend(false)}
             disabled={isGenerating || !currentDocument || currentDocument.classes.length === 0}
             title="Generar Backend Spring Boot"
-            className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold px-2.5 sm:px-3.5 py-1.5 rounded-md shadow-sm transition"
+            className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold px-2.5 sm:px-3.5 py-1.5 rounded-md shadow-sm transition cursor-pointer"
           >
             {isGenerating ? (
               <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
@@ -147,8 +174,26 @@ export const Navbar: React.FC = () => {
             <span className="hidden sm:inline">{isGenerating ? 'Generando...' : 'Spring Boot'}</span>
           </button>
 
+          <button
+            data-tour="navbar-flutter"
+            onClick={generateMobileApp}
+            disabled={isGeneratingMobile || !currentDocument || currentDocument.classes.length === 0}
+            title="Generar App Móvil Genérica (Flutter Material 3)"
+            className="flex items-center space-x-1.5 bg-cyan-600 hover:bg-cyan-700 dark:bg-cyan-600 dark:hover:bg-cyan-500 disabled:opacity-50 text-white text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-md shadow-sm transition cursor-pointer"
+          >
+            {isGeneratingMobile ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
+            ) : (
+              <Smartphone className="w-3.5 h-3.5 shrink-0" />
+            )}
+            <span className="hidden md:inline">{isGeneratingMobile ? 'Generando...' : 'Flutter App'}</span>
+          </button>
+
           {/* Enterprise Architect XMI Interchange Controls */}
-          <div className="flex items-center space-x-1 border border-slate-200 dark:border-slate-700 rounded-md p-0.5 bg-slate-50 dark:bg-slate-800/80">
+          <div
+            data-tour="navbar-xmi"
+            className="flex items-center space-x-1 border border-slate-200 dark:border-slate-700 rounded-md p-0.5 bg-slate-50 dark:bg-slate-800/80"
+          >
             <button
               onClick={exportXmi}
               disabled={isExportingXmi || !currentDocument || currentDocument.classes.length === 0}
@@ -195,6 +240,20 @@ export const Navbar: React.FC = () => {
 
           {/* Dark / Light Theme Toggle (Sun / Moon) */}
           <ThemeToggle />
+
+          {/* Help: replay the guided tour */}
+          {currentUser && (
+            <button
+              type="button"
+              data-tour="help-button"
+              onClick={restartTour}
+              title="Ayuda: ver tutorial"
+              aria-label="Ayuda: ver tutorial"
+              className="p-2 rounded-full text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-sky-300 bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all shadow-2xs flex items-center justify-center cursor-pointer"
+            >
+              <HelpCircle className="w-4 h-4" />
+            </button>
+          )}
 
           {/* User Profile & Demo Switcher */}
           <UserMenu />

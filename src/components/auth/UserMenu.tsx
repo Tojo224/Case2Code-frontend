@@ -1,12 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, LogIn, LogOut } from 'lucide-react';
+import { ChevronDown, HelpCircle, LogIn, LogOut } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useCollaborationStore } from '../../store/useCollaborationStore';
 import { useDiagramStore } from '../../store/useDiagramStore';
+import { useTourStore } from '../../store/useTourStore';
 
 export const UserMenu: React.FC = () => {
   const { currentUser, logout } = useAuthStore();
   const setAuthModalOpen = useCollaborationStore((s) => s.setAuthModalOpen);
+  const restartTour = useTourStore((s) => s.restart);
 
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -28,6 +30,11 @@ export const UserMenu: React.FC = () => {
     setAuthModalOpen(true);
   };
 
+  const handleShowTour = () => {
+    setIsOpen(false);
+    restartTour();
+  };
+
   if (!currentUser) {
     return (
       <button
@@ -43,6 +50,7 @@ export const UserMenu: React.FC = () => {
   return (
     <div className="relative" ref={menuRef}>
       <button
+        data-tour="user-menu"
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 pl-1.5 pr-2.5 py-1 rounded-full bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-colors shadow-2xs"
         title="Perfil de usuario"
@@ -69,6 +77,13 @@ export const UserMenu: React.FC = () => {
 
           {/* Actions */}
           <div className="pt-1">
+            <button
+              onClick={handleShowTour}
+              className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+              <span>Ver tutorial</span>
+            </button>
             <button
               onClick={handleLogout}
               className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"

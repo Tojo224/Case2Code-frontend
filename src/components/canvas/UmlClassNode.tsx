@@ -155,11 +155,16 @@ export const UmlClassNode = memo(({ data, selected }: NodeProps & { data: UmlCla
 
   return (
     <div
-      onClick={() => setSelectedClass(data)}
-      className={`group/node min-w-[230px] max-w-[320px] bg-white dark:bg-slate-900 rounded-lg shadow-md border-2 transition-all duration-150 relative ${
-        selected
-          ? 'border-sky-500 shadow-sky-100 dark:shadow-sky-950/40 shadow-lg'
-          : 'border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-600'
+      data-tour="class-node"
+      onClick={() => {
+        if (!data.isHologram) setSelectedClass(data);
+      }}
+      className={`group/node min-w-[230px] max-w-[320px] rounded-lg transition-all duration-150 relative ${
+        data.isHologram
+          ? 'bg-cyan-50/75 dark:bg-cyan-950/45 border-2 border-dashed border-cyan-400 dark:border-cyan-400 shadow-[0_0_22px_rgba(34,211,238,0.28)] backdrop-blur-xs opacity-90'
+          : selected
+          ? 'bg-white dark:bg-slate-900 border-2 border-sky-500 shadow-sky-100 dark:shadow-sky-950/40 shadow-lg'
+          : 'bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-600 shadow-md'
       }`}
     >
       {/* --- TOP BORDER HANDLES (3 points: Left 25%, Center 50%, Right 75%) --- */}
@@ -371,14 +376,26 @@ export const UmlClassNode = memo(({ data, selected }: NodeProps & { data: UmlCla
       />
 
       {/* Class Header */}
-      <div className="bg-slate-100 dark:bg-slate-800 px-3 py-2 border-b border-slate-200 dark:border-slate-700 rounded-t-md flex items-center justify-between">
+      <div
+        className={`px-3 py-2 border-b rounded-t-md flex items-center justify-between ${
+          data.isHologram
+            ? 'bg-cyan-100/80 dark:bg-cyan-900/50 border-cyan-300 dark:border-cyan-700/70'
+            : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700'
+        }`}
+      >
         <div className="flex flex-col flex-1 min-w-0 mr-2">
-          {data.stereotype && (
-            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono tracking-wider truncate">
-              «{data.stereotype}»
+          {data.isHologram ? (
+            <span className="text-[9px] font-bold uppercase tracking-wider text-cyan-700 dark:text-cyan-300 font-mono truncate">
+              👻 HOLOGRAMA (Sugerencia)
             </span>
+          ) : (
+            data.stereotype && (
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono tracking-wider truncate">
+                «{data.stereotype}»
+              </span>
+            )
           )}
-          {isEditingClassName ? (
+          {isEditingClassName && !data.isHologram ? (
             <input
               ref={classNameInputRef}
               type="text"
@@ -398,37 +415,41 @@ export const UmlClassNode = memo(({ data, selected }: NodeProps & { data: UmlCla
             <span
               onDoubleClick={(e) => {
                 e.stopPropagation();
-                setIsEditingClassName(true);
+                if (!data.isHologram) setIsEditingClassName(true);
               }}
-              title="Doble clic para renombrar"
-              className={`font-bold text-sm text-slate-800 dark:text-slate-100 truncate cursor-text ${
-                data.is_abstract ? 'italic' : ''
-              }`}
+              title={data.isHologram ? 'Entidad sugerida en holograma' : 'Doble clic para renombrar'}
+              className={`font-bold text-sm truncate ${
+                data.isHologram
+                  ? 'text-cyan-900 dark:text-cyan-100'
+                  : 'text-slate-800 dark:text-slate-100 cursor-text'
+              } ${data.is_abstract ? 'italic' : ''}`}
             >
               {data.name}
             </span>
           )}
         </div>
 
-        <div className="flex items-center space-x-1 shrink-0">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsEditingClassName(true);
-            }}
-            title="Renombrar clase"
-            className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition"
-          >
-            <Edit2 className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={handleDeleteClass}
-            title="Eliminar clase"
-            className="p-1 hover:bg-red-50 dark:hover:bg-red-950/40 rounded text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
+        {!data.isHologram && (
+          <div className="flex items-center space-x-1 shrink-0">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsEditingClassName(true);
+              }}
+              title="Renombrar clase"
+              className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition"
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={handleDeleteClass}
+              title="Eliminar clase"
+              className="p-1 hover:bg-red-50 dark:hover:bg-red-950/40 rounded text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Attributes List */}
@@ -504,9 +525,15 @@ export const UmlClassNode = memo(({ data, selected }: NodeProps & { data: UmlCla
             return (
               <div
                 key={attr.id}
-                onDoubleClick={(e) => handleStartEditAttribute(attr, e)}
-                title="Doble clic para editar atributo"
-                className="group flex items-center justify-between py-0.5 hover:bg-slate-50 dark:hover:bg-slate-800/70 px-1 rounded transition cursor-pointer"
+                onDoubleClick={(e) => {
+                  if (!data.isHologram && !attr.isHologram) handleStartEditAttribute(attr, e);
+                }}
+                title={attr.isHologram ? 'Atributo sugerido en holograma' : 'Doble clic para editar atributo'}
+                className={`group flex items-center justify-between py-0.5 px-1 rounded transition ${
+                  attr.isHologram && !data.isHologram
+                    ? 'bg-cyan-50/90 dark:bg-cyan-950/60 border border-dashed border-cyan-400/70'
+                    : 'hover:bg-slate-50 dark:hover:bg-slate-800/70 cursor-pointer'
+                }`}
               >
                 <div className="flex items-center space-x-1.5 font-mono min-w-0 mr-1">
                   {attr.primary_key ? (
@@ -518,7 +545,9 @@ export const UmlClassNode = memo(({ data, selected }: NodeProps & { data: UmlCla
                   )}
                   <span
                     className={`truncate ${
-                      attr.primary_key
+                      attr.isHologram
+                        ? 'font-semibold text-cyan-800 dark:text-cyan-200'
+                        : attr.primary_key
                         ? 'font-semibold text-slate-900 dark:text-slate-100'
                         : 'text-slate-700 dark:text-slate-300'
                     }`}
@@ -528,23 +557,30 @@ export const UmlClassNode = memo(({ data, selected }: NodeProps & { data: UmlCla
                   <span className="text-slate-400 dark:text-slate-500 text-[11px] shrink-0">
                     : {attr.type}
                   </span>
+                  {attr.isHologram && !data.isHologram && (
+                    <span className="text-[9px] bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 px-1 rounded font-sans">
+                      nuevo
+                    </span>
+                  )}
                 </div>
-                <div className="opacity-0 group-hover:opacity-100 flex items-center space-x-0.5 shrink-0 transition">
-                  <button
-                    onClick={(e) => handleStartEditAttribute(attr, e)}
-                    title="Editar atributo"
-                    className="p-0.5 text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 transition"
-                  >
-                    <Edit2 className="w-3 h-3" />
-                  </button>
-                  <button
-                    onClick={(e) => handleDeleteAttribute(e, attr.id)}
-                    title="Eliminar atributo"
-                    className="p-0.5 text-slate-400 hover:text-red-500 transition"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </button>
-                </div>
+                {!data.isHologram && !attr.isHologram && (
+                  <div className="opacity-0 group-hover:opacity-100 flex items-center space-x-0.5 shrink-0 transition">
+                    <button
+                      onClick={(e) => handleStartEditAttribute(attr, e)}
+                      title="Editar atributo"
+                      className="p-0.5 text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 transition"
+                    >
+                      <Edit2 className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={(e) => handleDeleteAttribute(e, attr.id)}
+                      title="Eliminar atributo"
+                      className="p-0.5 text-slate-400 hover:text-red-500 transition"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })
@@ -552,80 +588,82 @@ export const UmlClassNode = memo(({ data, selected }: NodeProps & { data: UmlCla
       </div>
 
       {/* Quick Add Attribute Footer */}
-      <div className="px-3 py-1.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 rounded-b-md">
-        {isAddingAttribute ? (
-          <form
-            onSubmit={handleSaveNewAttribute}
-            onClick={(e) => e.stopPropagation()}
-            className="space-y-1.5 py-1"
-          >
-            <div className="flex items-center space-x-1">
-              <input
-                ref={newAttrInputRef}
-                type="text"
-                placeholder="nombre (ej. precio)"
-                value={newAttrName}
-                onChange={(e) => setNewAttrName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') setIsAddingAttribute(false);
-                }}
-                className="w-full text-xs font-mono px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500"
-              />
-              <select
-                value={newAttrType}
-                onChange={(e) => setNewAttrType(e.target.value)}
-                className="text-[11px] font-mono px-1 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none"
-              >
-                {DATA_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-center justify-between pt-0.5">
-              <label className="flex items-center space-x-1 text-[11px] text-slate-600 dark:text-slate-400 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={newAttrPk}
-                  onChange={(e) => setNewAttrPk(e.target.checked)}
-                  className="rounded text-amber-500 focus:ring-0 w-3 h-3"
-                />
-                <span>PK</span>
-              </label>
-
+      {!data.isHologram && (
+        <div className="px-3 py-1.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 rounded-b-md">
+          {isAddingAttribute ? (
+            <form
+              onSubmit={handleSaveNewAttribute}
+              onClick={(e) => e.stopPropagation()}
+              className="space-y-1.5 py-1"
+            >
               <div className="flex items-center space-x-1">
-                <button
-                  type="button"
-                  onClick={() => setIsAddingAttribute(false)}
-                  className="px-2 py-0.5 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                <input
+                  ref={newAttrInputRef}
+                  type="text"
+                  placeholder="nombre (ej. precio)"
+                  value={newAttrName}
+                  onChange={(e) => setNewAttrName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') setIsAddingAttribute(false);
+                  }}
+                  className="w-full text-xs font-mono px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                />
+                <select
+                  value={newAttrType}
+                  onChange={(e) => setNewAttrType(e.target.value)}
+                  className="text-[11px] font-mono px-1 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none"
                 >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={!newAttrName.trim()}
-                  className="px-2.5 py-0.5 text-[11px] font-semibold text-white bg-sky-600 hover:bg-sky-700 disabled:opacity-40 rounded shadow-xs"
-                >
-                  Agregar
-                </button>
+                  {DATA_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
               </div>
-            </div>
-          </form>
-        ) : (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsAddingAttribute(true);
-            }}
-            className="w-full text-left text-[11px] text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 font-medium flex items-center space-x-1 hover:underline transition"
-          >
-            <Plus className="w-3 h-3" />
-            <span>+ Agregar atributo</span>
-          </button>
-        )}
-      </div>
+
+              <div className="flex items-center justify-between pt-0.5">
+                <label className="flex items-center space-x-1 text-[11px] text-slate-600 dark:text-slate-400 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={newAttrPk}
+                    onChange={(e) => setNewAttrPk(e.target.checked)}
+                    className="rounded text-amber-500 focus:ring-0 w-3 h-3"
+                  />
+                  <span>PK</span>
+                </label>
+
+                <div className="flex items-center space-x-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingAttribute(false)}
+                    className="px-2 py-0.5 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!newAttrName.trim()}
+                    className="px-2.5 py-0.5 text-[11px] font-semibold text-white bg-sky-600 hover:bg-sky-700 disabled:opacity-40 rounded shadow-xs"
+                  >
+                    Agregar
+                  </button>
+                </div>
+              </div>
+            </form>
+          ) : (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsAddingAttribute(true);
+              }}
+              className="w-full text-left text-[11px] text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 font-medium flex items-center space-x-1 hover:underline transition"
+            >
+              <Plus className="w-3 h-3" />
+              <span>+ Agregar atributo</span>
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 });

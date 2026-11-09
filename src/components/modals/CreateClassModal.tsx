@@ -325,6 +325,7 @@ export const CreateClassModal: React.FC = () => {
               </label>
               <input
                 ref={classNameInputRef}
+                data-tour="create-class-name"
                 type="text"
                 placeholder="ej. Cliente, Pedido, Factura"
                 value={className}
@@ -384,7 +385,7 @@ export const CreateClassModal: React.FC = () => {
           </div>
 
           {/* Attributes Compartment Header */}
-          <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
+          <div data-tour="create-class-attributes" className="pt-2 border-t border-slate-200 dark:border-slate-800">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center space-x-2">
                 <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
@@ -575,6 +576,7 @@ export const CreateClassModal: React.FC = () => {
               </button>
               <button
                 type="submit"
+                data-tour="create-class-submit"
                 disabled={isSubmitting}
                 className="px-4 py-1.5 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-700 active:bg-sky-800 rounded-lg shadow-sm transition disabled:opacity-50 flex items-center space-x-1.5"
               >

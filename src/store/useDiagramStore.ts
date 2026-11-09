@@ -20,6 +20,7 @@ interface DiagramState {
   edges: Edge[];
   isLoading: boolean;
   isGenerating: boolean;
+  isGeneratingMobile: boolean;
   error: string | null;
 
   // Selected elements for inspectors/modals
@@ -30,6 +31,9 @@ interface DiagramState {
   junctionConfig: { auto: boolean; name: string };
   isCreateClassModalOpen: boolean;
   createClassInitialPosition: { x: number; y: number } | null;
+  isSqlModalOpen: boolean;
+  hologramCommands: UmlCommand[] | null;
+  isApplyingHologram: boolean;
 
   // Actions
   fetchDiagrams: () => Promise<void>;
@@ -37,9 +41,14 @@ interface DiagramState {
   loadDiagram: (diagramId: string) => Promise<void>;
   dispatchCommand: (command: UmlCommand) => Promise<void>;
   dispatchCommands: (commands: UmlCommand[]) => Promise<void>;
+  setHologramCommands: (commands: UmlCommand[] | null) => void;
+  applyHologram: () => Promise<void>;
+  clearHologram: () => void;
   setActiveRelationType: (type: RelationshipType | null) => void;
   openCreateClassModal: (position?: { x: number; y: number }) => void;
   closeCreateClassModal: () => void;
+  openSqlModal: () => void;
+  closeSqlModal: () => void;
   
   // Canvas events
   onNodesChange: OnNodesChange;
@@ -53,6 +62,7 @@ interface DiagramState {
   setJunctionConfig: (config: { auto: boolean; name: string }) => void;
   clearError: () => void;
   generateBackend: (verify?: boolean) => Promise<void>;
+  generateMobileApp: () => Promise<void>;
 
   // Enterprise Architect XMI Interchange
   isExportingXmi: boolean;
@@ -64,6 +74,10 @@ interface DiagramState {
   // AI Assistant
   isAssistantOpen: boolean;
   toggleAssistant: () => void;
+
+  // Relationship sidebar collapse (lifted so the guided tour can expand it)
+  isSidebarCollapsed: boolean;
+  setSidebarCollapsed: (collapsed: boolean) => void;
   sendAssistantPrompt: (
     prompt: string,
     imageData?: { base64: string; mimeType: string }
@@ -124,26 +138,128 @@ function getSmartDefaultHandles(
   }
 }
 
-function documentToElements(doc: CanonicalUmlDocument): { nodes: Node[]; edges: Edge[] } {
-  const nodes: Node[] = doc.classes.map((cls) => ({
+function buildHologramDocument(
+  baseDoc: CanonicalUmlDocument,
+  hologramCommands?: UmlCommand[] | null
+): CanonicalUmlDocument {
+  if (!hologramCommands || hologramCommands.length === 0) {
+    return baseDoc;
+  }
+
+  const classes: UmlClass[] = baseDoc.classes.map((c) => ({
+    ...c,
+    attributes: c.attributes.map((a) => ({ ...a })),
+  }));
+  const relationships: UmlRelationship[] = baseDoc.relationships.map((r) => ({ ...r }));
+
+  let createdCount = 0;
+  hologramCommands.forEach((cmd, idx) => {
+    if (cmd.command_type === 'CREATE_CLASS') {
+      const exists = classes.some(
+        (c) => c.id === cmd.class_id || c.name.toLowerCase() === cmd.name.toLowerCase()
+      );
+      if (!exists) {
+        const col = (baseDoc.classes.length + createdCount) % 3;
+        const row = Math.floor((baseDoc.classes.length + createdCount) / 3);
+        createdCount += 1;
+        classes.push({
+          id: cmd.class_id || `holo-cls-${idx}`,
+          name: cmd.name,
+          position: cmd.position || { x: 80 + col * 320, y: 80 + row * 280 },
+          is_abstract: Boolean(cmd.is_abstract),
+          stereotype: cmd.stereotype || null,
+          isHologram: true,
+          attributes: [
+            {
+              id: `holo-pk-${idx}`,
+              name: 'id',
+              type: 'Long',
+              primary_key: true,
+              nullable: false,
+              visibility: 'PRIVATE',
+              isHologram: true,
+            },
+          ],
+        });
+      }
+    } else if (cmd.command_type === 'ADD_ATTRIBUTE') {
+      const targetCls = classes.find(
+        (c) => c.id === cmd.class_id || c.name.toLowerCase() === String(cmd.class_id).toLowerCase()
+      );
+      if (targetCls) {
+        const attrExists = targetCls.attributes.some(
+          (a) => a.name.toLowerCase() === cmd.name.toLowerCase()
+        );
+        if (!attrExists) {
+          targetCls.attributes.push({
+            id: cmd.attribute_id || `holo-attr-${idx}`,
+            name: cmd.name,
+            type: cmd.type || 'String',
+            primary_key: Boolean(cmd.primary_key),
+            nullable: cmd.nullable ?? true,
+            visibility: cmd.visibility || 'PRIVATE',
+            isHologram: true,
+          });
+        }
+      }
+    } else if (cmd.command_type === 'CREATE_RELATIONSHIP') {
+      const srcCls = classes.find(
+        (c) =>
+          c.id === cmd.source_class_id ||
+          c.name.toLowerCase() === String(cmd.source_class_id).toLowerCase()
+      );
+      const tgtCls = classes.find(
+        (c) =>
+          c.id === cmd.target_class_id ||
+          c.name.toLowerCase() === String(cmd.target_class_id).toLowerCase()
+      );
+      if (srcCls && tgtCls) {
+        relationships.push({
+          id: cmd.relationship_id || `holo-rel-${idx}`,
+          type: cmd.type,
+          source_class_id: srcCls.id,
+          target_class_id: tgtCls.id,
+          source_cardinality: cmd.source_cardinality || '1',
+          target_cardinality: cmd.target_cardinality || '*',
+          source_role: cmd.source_role || null,
+          target_role: cmd.target_role || null,
+          isHologram: true,
+        });
+      }
+    }
+  });
+
+  return {
+    ...baseDoc,
+    classes,
+    relationships,
+  };
+}
+
+function documentToElements(
+  doc: CanonicalUmlDocument,
+  hologramCommands?: UmlCommand[] | null
+): { nodes: Node[]; edges: Edge[] } {
+  const effectiveDoc = buildHologramDocument(doc, hologramCommands);
+  const nodes: Node[] = effectiveDoc.classes.map((cls) => ({
     id: cls.id,
     type: 'umlClass',
     position: { x: cls.position.x, y: cls.position.y },
     data: cls,
   }));
 
-  const classMap = new Map(doc.classes.map((c) => [c.id, c]));
+  const classMap = new Map(effectiveDoc.classes.map((c) => [c.id, c]));
 
   // Count relationships between each pair of classes to distribute slots
   const pairCounts = new Map<string, number>();
   const pairSlots = new Map<string, number>();
 
-  for (const rel of doc.relationships) {
+  for (const rel of effectiveDoc.relationships) {
     const key = [rel.source_class_id, rel.target_class_id].sort().join(':::');
     pairCounts.set(key, (pairCounts.get(key) || 0) + 1);
   }
 
-  const edges: Edge[] = doc.relationships.map((rel) => {
+  const edges: Edge[] = effectiveDoc.relationships.map((rel) => {
     const key = [rel.source_class_id, rel.target_class_id].sort().join(':::');
     const totalSlots = pairCounts.get(key) || 1;
     const currentSlot = pairSlots.get(key) || 0;
@@ -185,6 +301,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
   edges: [],
   isLoading: false,
   isGenerating: false,
+  isGeneratingMobile: false,
   error: null,
   selectedClass: null,
   pendingConnection: null,
@@ -193,6 +310,9 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
   junctionConfig: { auto: true, name: '' },
   isCreateClassModalOpen: false,
   createClassInitialPosition: null,
+  isSqlModalOpen: false,
+  hologramCommands: null,
+  isApplyingHologram: false,
 
   fetchDiagrams: async () => {
     try {
@@ -308,11 +428,45 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
         nodes,
         edges,
         selectedClass: updatedSelected,
+        hologramCommands: null,
       });
     } catch (e: any) {
       set({ error: e.message });
       throw e;
     }
+  },
+
+  setHologramCommands: (commands) => {
+    const doc = get().currentDocument;
+    if (!doc) return;
+    const { nodes, edges } = documentToElements(doc, commands);
+    set({
+      hologramCommands: commands && commands.length > 0 ? commands : null,
+      nodes,
+      edges,
+    });
+  },
+
+  applyHologram: async () => {
+    const cmds = get().hologramCommands;
+    if (!cmds || cmds.length === 0) return;
+    set({ isApplyingHologram: true });
+    try {
+      await get().dispatchCommands(cmds);
+      set({ hologramCommands: null, isApplyingHologram: false });
+    } catch {
+      set({ isApplyingHologram: false });
+    }
+  },
+
+  clearHologram: () => {
+    const doc = get().currentDocument;
+    if (!doc) {
+      set({ hologramCommands: null });
+      return;
+    }
+    const { nodes, edges } = documentToElements(doc, null);
+    set({ hologramCommands: null, nodes, edges });
   },
 
   onNodesChange: (changes) => {
@@ -329,7 +483,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
 
   onNodeDragStop: (_event, node) => {
     const doc = get().currentDocument;
-    if (!doc) return;
+    if (!doc || (node.data as any)?.isHologram) return;
     get().dispatchCommand({
       command_type: 'MOVE_CLASS',
       class_id: node.id,
@@ -513,6 +667,8 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       isCreateClassModalOpen: false,
       createClassInitialPosition: null,
     }),
+  openSqlModal: () => set({ isSqlModalOpen: true }),
+  closeSqlModal: () => set({ isSqlModalOpen: false }),
 
   generateBackend: async (verify = false) => {
     const doc = get().currentDocument;
@@ -524,6 +680,19 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       set({ isGenerating: false });
     } catch (e: any) {
       set({ error: e.message, isGenerating: false });
+    }
+  },
+
+  generateMobileApp: async () => {
+    const doc = get().currentDocument;
+    if (!doc) return;
+
+    try {
+      set({ isGeneratingMobile: true, error: null });
+      await api.downloadMobileAppZip(doc.id, doc.name);
+      set({ isGeneratingMobile: false });
+    } catch (e: any) {
+      set({ error: e.message, isGeneratingMobile: false });
     }
   },
 
@@ -587,6 +756,10 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
 
   isAssistantOpen: false,
   toggleAssistant: () => set((state) => ({ isAssistantOpen: !state.isAssistantOpen })),
+
+  // Starts collapsed on small screens (< 1024px), same as the previous local state
+  isSidebarCollapsed: typeof window !== 'undefined' ? window.innerWidth < 1024 : false,
+  setSidebarCollapsed: (collapsed) => set({ isSidebarCollapsed: collapsed }),
 
   sendAssistantPrompt: async (prompt: string, imageData?: { base64: string; mimeType: string }) => {
     const doc = get().currentDocument;

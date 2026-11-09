@@ -10,10 +10,13 @@ vi.mock('../services/api', () => ({
     getDiagram: vi.fn(),
     executeCommand: vi.fn(),
     downloadBackendZip: vi.fn(),
+    downloadMobileAppZip: vi.fn(),
     sendAssistantPrompt: vi.fn(),
     exportXmi: vi.fn(),
     importXmi: vi.fn(),
     importNewDiagramXmi: vi.fn(),
+    getSqlPreview: vi.fn(),
+    exportSql: vi.fn(),
   },
 }));
 
@@ -213,6 +216,24 @@ describe('useDiagramStore', () => {
     const state = useDiagramStore.getState();
     expect(state.currentDocument?.id).toBe('diag-imported-new');
     expect(state.diagramsList[0].id).toBe('diag-imported-new');
+  });
+
+  it('opens and closes the SQL generator and exporter modal', () => {
+    expect(useDiagramStore.getState().isSqlModalOpen).toBe(false);
+    useDiagramStore.getState().openSqlModal();
+    expect(useDiagramStore.getState().isSqlModalOpen).toBe(true);
+    useDiagramStore.getState().closeSqlModal();
+    expect(useDiagramStore.getState().isSqlModalOpen).toBe(false);
+  });
+
+  it('generates and downloads the generic Flutter mobile application zip', async () => {
+    useDiagramStore.setState({ currentDocument: sampleDoc });
+    vi.mocked(api.downloadMobileAppZip).mockResolvedValue();
+
+    await useDiagramStore.getState().generateMobileApp();
+
+    expect(api.downloadMobileAppZip).toHaveBeenCalledWith('diag-1', 'Peluqueria');
+    expect(useDiagramStore.getState().isGeneratingMobile).toBe(false);
   });
 });
 

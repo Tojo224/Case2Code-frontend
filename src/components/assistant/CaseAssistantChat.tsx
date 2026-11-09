@@ -20,12 +20,22 @@ import {
   Cpu,
   Terminal,
   RefreshCw,
+  Maximize2,
+  Minimize2,
+  Eye,
 } from 'lucide-react';
 import { AiProviderStatus, ChatMessage } from '../../types/collaboration';
 
 export const CaseAssistantChat: React.FC = () => {
-  const { isAssistantOpen, toggleAssistant, sendAssistantPrompt, currentDocument } =
-    useDiagramStore();
+  const {
+    isAssistantOpen,
+    toggleAssistant,
+    sendAssistantPrompt,
+    currentDocument,
+    setHologramCommands,
+    dispatchCommands,
+    clearHologram,
+  } = useDiagramStore();
   const {
     chatMessages,
     typingUsers,
@@ -54,11 +64,32 @@ export const CaseAssistantChat: React.FC = () => {
   const [localUrlInput, setLocalUrlInput] = useState('http://localhost:11434');
   const [localModelInput, setLocalModelInput] = useState('qwen2.5-coder:3b');
   const [isSavingConfig, setIsSavingConfig] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [chatWidth, setChatWidth] = useState(480);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const typingTimeoutRef = useRef<number | null>(null);
+  const isResizingRef = useRef(false);
+
+  const startResizing = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizingRef.current = true;
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      if (!isResizingRef.current) return;
+      const newWidth = Math.min(Math.max(window.innerWidth - moveEvent.clientX - 16, 380), 900);
+      setChatWidth(newWidth);
+      setIsExpanded(newWidth >= 620);
+    };
+    const onMouseUp = () => {
+      isResizingRef.current = false;
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
 
   const fetchAiStatus = async () => {
     try {
@@ -259,10 +290,10 @@ export const CaseAssistantChat: React.FC = () => {
   }, [typingUsers, currentUser?.id]);
 
   const quickPrompts = [
-    '¿Qué opinas de la cardinalidad entre las entidades?',
-    'Crea la clase Factura con id, fecha y total',
-    'Revisa si el diseño cumple con 3FN',
-    'Relaciona Cliente con Pedido de 1 a N',
+    '@ai Crea una base de datos para un ecommerce',
+    '@ai ¿Qué opinas de la cardinalidad entre las entidades?',
+    '@ai Crea la clase Factura con id, fecha y total',
+    '@ai Revisa si el diseño cumple con 3FN',
   ];
 
   if (!isAssistantOpen) return null;
@@ -271,8 +302,16 @@ export const CaseAssistantChat: React.FC = () => {
     <aside
       onDragOver={(e) => e.preventDefault()}
       onDrop={handleDrop}
-      className="fixed right-0 sm:right-4 top-14 sm:top-16 bottom-0 sm:bottom-4 w-full sm:w-[430px] max-w-full bg-white dark:bg-slate-900 border-l sm:border border-slate-200/90 dark:border-slate-800 rounded-none sm:rounded-2xl shadow-2xl flex flex-col z-40 overflow-hidden animate-in slide-in-from-right duration-200 transition-colors"
+      style={{ width: typeof window !== 'undefined' && window.innerWidth >= 640 ? `${chatWidth}px` : undefined }}
+      className="fixed right-0 sm:right-4 top-14 sm:top-16 bottom-0 sm:bottom-4 w-full max-w-[95vw] bg-white dark:bg-slate-900 border-l sm:border border-slate-200/90 dark:border-slate-800 rounded-none sm:rounded-2xl shadow-2xl flex flex-col z-40 overflow-hidden animate-in slide-in-from-right duration-200 transition-colors"
     >
+      {/* Left edge drag resize handle (Desktop) */}
+      <div
+        onMouseDown={startResizing}
+        title="Arrastrá para agrandar o achicar el chat"
+        className="hidden sm:block absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize hover:bg-purple-500/60 active:bg-purple-500 z-50 transition-colors"
+      />
+
       {/* Header */}
       <div className="bg-slate-900 dark:bg-slate-950 text-white px-4 py-3 flex items-center justify-between border-b border-slate-800">
         <div className="flex items-center space-x-2.5">
@@ -302,6 +341,17 @@ export const CaseAssistantChat: React.FC = () => {
         </div>
 
         <div className="flex items-center space-x-1">
+          <button
+            onClick={() => {
+              const nextExpanded = !isExpanded;
+              setIsExpanded(nextExpanded);
+              setChatWidth(nextExpanded ? 700 : 480);
+            }}
+            className="hidden sm:inline-flex text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition cursor-pointer"
+            title={isExpanded ? 'Restaurar tamaño del chat' : 'Agrandar chat'}
+          >
+            {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+          </button>
           <button
             onClick={() => {
               setIsConfigOpen((v) => !v);
@@ -428,35 +478,44 @@ export const CaseAssistantChat: React.FC = () => {
       )}
 
       {/* Mode Selector Bar (Advisory vs Pair Programmer) */}
-      <div className="px-3 py-2 bg-slate-100/90 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-        <div className="flex items-center space-x-1 text-[11px] font-medium text-slate-600 dark:text-slate-300">
-          <span>Rol del Senior AI:</span>
+      <div className="px-3 py-2 bg-slate-100/90 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 space-y-1.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-1 text-[11px] font-medium text-slate-600 dark:text-slate-300">
+            <span>Rol del Senior AI:</span>
+          </div>
+          <div className="flex bg-slate-200/80 dark:bg-slate-900/80 p-0.5 rounded-lg border border-slate-300/60 dark:border-slate-700">
+            <button
+              onClick={() => setAiMode('advisory')}
+              className={`flex items-center space-x-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition ${
+                aiMode === 'advisory'
+                  ? 'bg-white dark:bg-indigo-600 text-indigo-700 dark:text-white shadow-xs font-semibold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+              title="Asesor Senior: Revisa arquitectura, sugiere patrones y responde dudas sin modificar el lienzo"
+            >
+              <Lightbulb className="w-3 h-3 text-amber-500 dark:text-amber-300" />
+              <span>Asesor</span>
+            </button>
+            <button
+              onClick={() => setAiMode('pair_programmer')}
+              className={`flex items-center space-x-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition ${
+                aiMode === 'pair_programmer'
+                  ? 'bg-white dark:bg-purple-600 text-purple-700 dark:text-white shadow-xs font-semibold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+              title="Pair Programmer: Ejecuta modificaciones y crea clases/relaciones en el diagrama en tiempo real"
+            >
+              <Zap className="w-3 h-3 text-purple-500 dark:text-purple-300" />
+              <span>Pair Dev</span>
+            </button>
+          </div>
         </div>
-        <div className="flex bg-slate-200/80 dark:bg-slate-900/80 p-0.5 rounded-lg border border-slate-300/60 dark:border-slate-700">
-          <button
-            onClick={() => setAiMode('advisory')}
-            className={`flex items-center space-x-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition ${
-              aiMode === 'advisory'
-                ? 'bg-white dark:bg-indigo-600 text-indigo-700 dark:text-white shadow-xs font-semibold'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
-            title="Asesor Senior: Revisa arquitectura, sugiere patrones y responde dudas sin modificar el lienzo"
-          >
-            <Lightbulb className="w-3 h-3 text-amber-500 dark:text-amber-300" />
-            <span>Asesor</span>
-          </button>
-          <button
-            onClick={() => setAiMode('pair_programmer')}
-            className={`flex items-center space-x-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition ${
-              aiMode === 'pair_programmer'
-                ? 'bg-white dark:bg-purple-600 text-purple-700 dark:text-white shadow-xs font-semibold'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
-            title="Pair Programmer: Ejecuta modificaciones y crea clases/relaciones en el diagrama en tiempo real"
-          >
-            <Zap className="w-3 h-3 text-purple-500 dark:text-purple-300" />
-            <span>Pair Dev</span>
-          </button>
+        <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center justify-between bg-white/70 dark:bg-slate-900/60 px-2 py-1 rounded-md border border-slate-200/70 dark:border-slate-700/70">
+          <span>
+            {aiMode === 'advisory'
+              ? '💡 Modo Asesor: Analiza y aconseja sin tocar el diagrama.'
+              : '⚡ Modo Pair Dev: Crea y modifica tablas/relaciones en el lienzo.'}
+          </span>
         </div>
       </div>
 
@@ -535,7 +594,9 @@ export const CaseAssistantChat: React.FC = () => {
 
                 {/* Message Bubble */}
                 <div
-                  className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed shadow-xs ${
+                  className={`max-w-[92%] rounded-2xl px-3.5 py-2.5 ${
+                    isExpanded ? 'text-[13px]' : 'text-xs'
+                  } leading-relaxed shadow-xs ${
                     isAi
                       ? 'bg-white dark:bg-slate-800/90 text-slate-800 dark:text-slate-100 border border-purple-200/80 dark:border-purple-900/60 rounded-tl-none'
                       : isMe
@@ -544,6 +605,45 @@ export const CaseAssistantChat: React.FC = () => {
                   }`}
                 >
                   <p className="whitespace-pre-line select-text">{msg.content}</p>
+
+                  {/* Hologram Suggested Commands Card */}
+                  {isAi && msg.suggested_commands && msg.suggested_commands.length > 0 && cmdCount === 0 && (
+                    <div className="mt-2.5 pt-2 border-t border-cyan-200 dark:border-cyan-900/60 space-y-2">
+                      <div className="flex items-center justify-between text-[10px] font-semibold text-cyan-700 dark:text-cyan-300">
+                        <span>👻 Propuesta en Holograma ({msg.suggested_commands.length} elementos)</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setHologramCommands(msg.suggested_commands || null)}
+                          className="inline-flex items-center space-x-1 px-2.5 py-1 bg-cyan-50 dark:bg-cyan-950/60 hover:bg-cyan-100 dark:hover:bg-cyan-900 text-cyan-800 dark:text-cyan-200 border border-cyan-300 dark:border-cyan-700 rounded-lg text-[11px] font-medium transition cursor-pointer"
+                        >
+                          <Eye className="w-3 h-3" />
+                          <span>Ver Holograma</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (msg.suggested_commands) {
+                              dispatchCommands(msg.suggested_commands);
+                            }
+                          }}
+                          className="inline-flex items-center space-x-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
+                        >
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span>Aplicar al Diagrama</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => clearHologram()}
+                          className="inline-flex items-center space-x-1 px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-[11px] transition cursor-pointer"
+                        >
+                          <X className="w-3 h-3" />
+                          <span>Ocultar</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Applied UML Commands badge and command chips */}
                   {isAi && cmdCount > 0 && (
@@ -624,7 +724,27 @@ export const CaseAssistantChat: React.FC = () => {
       )}
 
       {/* Input Form */}
-      <div className="p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
+      <div className="p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 space-y-2">
+        {/* Call instruction note */}
+        <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200/60 dark:border-purple-800/50 rounded-lg px-2.5 py-1">
+          <span>
+            Usá <strong className="text-purple-700 dark:text-purple-300 font-mono">@ai</strong> o{' '}
+            <strong className="text-purple-700 dark:text-purple-300 font-mono">@senior</strong> para invocar al asistente en la sala
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              if (!inputPrompt.toLowerCase().includes('@ai')) {
+                setInputPrompt((prev) => `@ai ${prev}`.trimStart());
+              }
+            }}
+            className="ml-2 shrink-0 bg-purple-600 hover:bg-purple-500 text-white font-mono font-semibold px-1.5 py-0.5 rounded text-[10px] transition cursor-pointer"
+            title="Insertar comando @ai en el mensaje"
+          >
+            + @ai
+          </button>
+        </div>
+
         {attachedImage && (
           <div className="mb-2 flex items-center justify-between bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 p-2 rounded-xl text-xs text-indigo-900 dark:text-indigo-200 animate-in fade-in">
             <div className="flex items-center space-x-2 min-w-0">

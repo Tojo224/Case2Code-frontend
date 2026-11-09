@@ -3,6 +3,7 @@ import { ArrowLeft, CheckCircle, Eye, EyeOff, KeyRound, Lock, Mail, User as User
 import { useAuthStore } from '../../store/useAuthStore';
 import { useCollaborationStore } from '../../store/useCollaborationStore';
 import { useDiagramStore } from '../../store/useDiagramStore';
+import { offerTourWelcome } from '../../tour/offerWelcome';
 
 export const AuthModal: React.FC = () => {
   const { isAuthModalOpen, setAuthModalOpen } = useCollaborationStore();
@@ -46,6 +47,7 @@ export const AuthModal: React.FC = () => {
       if (ok) {
         setAuthModalOpen(false);
         await fetchDiagrams();
+        offerTourWelcome();
       }
     } else if (mode === 'REGISTER') {
       if (password.length < 6) {
@@ -60,6 +62,7 @@ export const AuthModal: React.FC = () => {
       if (ok) {
         setAuthModalOpen(false);
         await fetchDiagrams();
+        offerTourWelcome();
       }
     } else if (mode === 'FORGOT') {
       const res = await forgotPassword(email);

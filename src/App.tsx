@@ -10,15 +10,20 @@ import { DiagramCanvas } from './components/canvas/DiagramCanvas';
 import { CaseAssistantChat } from './components/assistant/CaseAssistantChat';
 import { InviteModal } from './components/collaboration/InviteModal';
 import { AuthModal } from './components/auth/AuthModal';
+import { TourController } from './components/tour/TourController';
+import { useTourStore } from './store/useTourStore';
+import { offerTourWelcome } from './tour/offerWelcome';
 
 export const App: React.FC = () => {
   const { fetchDiagrams, currentDocument, createDiagram, isLoading, resetDiagrams } = useDiagramStore();
   const { loadSession } = useAuthStore();
   const { initTheme } = useThemeStore();
+  const initTour = useTourStore((s) => s.initTour);
 
   useEffect(() => {
     // 0. Initialize theme (dark / light mode)
     initTheme();
+    initTour();
 
     const init = async () => {
       // 1. Initialize user session (purges any legacy demo user)
@@ -28,6 +33,9 @@ export const App: React.FC = () => {
       if (user) {
         // 2. Fetch accessible diagrams for active user
         await fetchDiagrams();
+
+        // 3. First-time users get offered the guided tour (project loaded or empty state shown)
+        offerTourWelcome();
       } else {
         // Prompt login if no active user session
         resetDiagrams();
@@ -36,7 +44,7 @@ export const App: React.FC = () => {
     };
 
     init();
-  }, [initTheme, loadSession, fetchDiagrams, resetDiagrams]);
+  }, [initTheme, initTour, loadSession, fetchDiagrams, resetDiagrams]);
 
   return (
     <div className="w-screen h-screen flex flex-col overflow-hidden bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
@@ -58,6 +66,7 @@ export const App: React.FC = () => {
               Crea tu primer proyecto para comenzar a diseñar tus diagramas UML en tu espacio privado.
             </p>
             <button
+              data-tour="empty-create-project"
               onClick={() => createDiagram('Mi Primer Diagrama', 'Proyecto personal')}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-lg shadow-sm transition-colors cursor-pointer"
             >
@@ -78,6 +87,9 @@ export const App: React.FC = () => {
       {/* Global Collaboration & Auth Modals */}
       <InviteModal />
       <AuthModal />
+
+      {/* Guided onboarding tour */}
+      <TourController />
     </div>
   );
 };
