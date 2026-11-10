@@ -183,7 +183,7 @@ describe('useDiagramStore', () => {
 
   it('exports data dictionary PDF and stores error on failure', async () => {
     useDiagramStore.setState({ currentDocument: sampleDoc });
-    vi.mocked(api.exportDataDictionary).mockResolvedValue();
+    vi.mocked(api.exportDataDictionary).mockResolvedValue(null);
 
     await useDiagramStore.getState().exportDocs();
 
@@ -194,6 +194,19 @@ describe('useDiagramStore', () => {
     await useDiagramStore.getState().exportDocs();
 
     expect(useDiagramStore.getState().error).toBe('boom');
+    expect(useDiagramStore.getState().isExportingDocs).toBe(false);
+  });
+
+  it('asks for the AI data dictionary and warns when the AI did not answer', async () => {
+    useDiagramStore.setState({ currentDocument: sampleDoc, error: null });
+    vi.mocked(api.exportDataDictionary).mockResolvedValue('ai');
+    await useDiagramStore.getState().exportDocs(true);
+    expect(api.exportDataDictionary).toHaveBeenLastCalledWith('diag-1', 'Peluqueria', true);
+    expect(useDiagramStore.getState().error).toBeNull();
+
+    vi.mocked(api.exportDataDictionary).mockResolvedValue('fallback');
+    await useDiagramStore.getState().exportDocs(true);
+    expect(useDiagramStore.getState().error).toContain('descripciones automáticas');
     expect(useDiagramStore.getState().isExportingDocs).toBe(false);
   });
 

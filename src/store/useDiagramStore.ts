@@ -72,7 +72,7 @@ interface DiagramState {
   // Enterprise Architect XMI Interchange
   isExportingXmi: boolean;
   isExportingDocs: boolean;
-  exportDocs: () => Promise<void>;
+  exportDocs: (withAi?: boolean) => Promise<void>;
   isImportingXmi: boolean;
   exportXmi: () => Promise<void>;
   importXmi: (file: File) => Promise<void>;
@@ -775,13 +775,20 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
   isImportingXmi: false,
   isExportingDocs: false,
 
-  exportDocs: async () => {
+  exportDocs: async (withAi: boolean = false) => {
     const doc = get().currentDocument;
     if (!doc) return;
     try {
       set({ isExportingDocs: true, error: null });
-      await api.exportDataDictionary(doc.id, doc.name);
-      set({ isExportingDocs: false });
+      const mode = withAi
+        ? await api.exportDataDictionary(doc.id, doc.name, true)
+        : await api.exportDataDictionary(doc.id, doc.name);
+      set({
+        isExportingDocs: false,
+        ...(mode === 'fallback'
+          ? { error: 'La IA no respondió: el documento se generó con las descripciones automáticas.' }
+          : {}),
+      });
     } catch (e: any) {
       set({ error: e.message, isExportingDocs: false });
     }

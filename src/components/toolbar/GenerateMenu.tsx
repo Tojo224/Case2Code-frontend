@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ChevronDown, Download, FileDown, FileText, FileUp, RefreshCw, Smartphone } from 'lucide-react';
+import { ChevronDown, Download, FileDown, FileText, FileUp, RefreshCw, Smartphone, Sparkles } from 'lucide-react';
 import { useDiagramStore } from '../../store/useDiagramStore';
 
 interface Props {
@@ -112,6 +112,16 @@ export const GenerateMenu: React.FC<Props> = ({ onImportClick }) => {
           >
             <FileText className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
             <span>{isExportingDocs ? 'Generando documento...' : 'Diccionario de datos (PDF)'}</span>
+          </button>
+          <button
+            role="menuitem"
+            disabled={isExportingDocs || !hasClasses}
+            onClick={() => run(() => exportDocs(true))}
+            title="Igual que el anterior, pero la IA redacta las descripciones, ejemplos y reglas (usa una consulta a la IA)"
+            className={ITEM}
+          >
+            <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+            <span>Diccionario con IA (PDF)</span>
           </button>
 
           <div className="my-1 h-px bg-slate-200 dark:bg-slate-700" role="separator" />

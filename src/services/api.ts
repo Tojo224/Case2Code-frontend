@@ -214,8 +214,18 @@ export const api = {
     window.URL.revokeObjectURL(downloadUrl);
   },
 
-  async exportDataDictionary(diagramId: string, diagramName?: string): Promise<void> {
-    const url = `${BASE_URL}/diagrams/${diagramId}/export/docs`;
+  /**
+   * Downloads the data dictionary PDF. With `withAi` the descriptions are drafted by the LLM
+   * (one request, cached per diagram version); the result says whether the AI answered
+   * ('ai'), a cached answer was reused ('cache') or the automatic descriptions were used
+   * instead ('fallback'). Without the flag it always returns null.
+   */
+  async exportDataDictionary(
+    diagramId: string,
+    diagramName?: string,
+    withAi: boolean = false,
+  ): Promise<'ai' | 'cache' | 'fallback' | null> {
+    const url = `${BASE_URL}/diagrams/${diagramId}/export/docs${withAi ? '/ai' : ''}`;
     const token = localStorage.getItem('case2code_token');
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -230,11 +240,13 @@ export const api = {
     const a = document.createElement('a');
     a.href = downloadUrl;
     const safeName = (diagramName || `diagrama-${diagramId}`).replace(/[^a-zA-Z0-9_\-]/g, '_');
-    a.download = `${safeName}_diccionario_datos.pdf`;
+    a.download = `${safeName}_diccionario_datos${withAi ? '_ia' : ''}.pdf`;
     document.body.appendChild(a);
     a.click();
     a.remove();
     window.URL.revokeObjectURL(downloadUrl);
+    const mode = res.headers.get('X-Docs-AI');
+    return mode === 'ai' || mode === 'cache' || mode === 'fallback' ? mode : null;
   },
 
   async importXmi(diagramId: string, file: File): Promise<CanonicalUmlDocument> {
