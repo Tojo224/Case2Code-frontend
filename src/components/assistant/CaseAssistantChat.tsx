@@ -15,6 +15,7 @@ import {
   operationKey,
   operationResolutionKey,
 } from './aiProposals';
+import { ChatMarkdown } from './ChatMarkdown';
 import { collaborationWs } from '../../services/websocket';
 import { api } from '../../services/api';
 import {
@@ -691,7 +692,7 @@ export const CaseAssistantChat: React.FC = () => {
                       : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-700 rounded-tl-none'
                   }`}
                 >
-                  <p className="whitespace-pre-line select-text">{msg.content}</p>
+                  <ChatMarkdown text={msg.content} />
 
                   {/* Hologram Suggested Commands Card */}
                   {isAi && msg.suggested_commands && msg.suggested_commands.length > 0 && cmdCount === 0 && (() => {
