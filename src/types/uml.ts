@@ -76,7 +76,8 @@ export type CommandType =
   | 'DELETE_ATTRIBUTE'
   | 'CREATE_RELATIONSHIP'
   | 'UPDATE_RELATIONSHIP'
-  | 'DELETE_RELATIONSHIP';
+  | 'DELETE_RELATIONSHIP'
+  | 'RESTORE_CLASS';
 
 export interface BaseCommand {
   command_type: CommandType;
@@ -171,6 +172,12 @@ export interface DeleteRelationshipCommand extends BaseCommand {
   relationship_id: string;
 }
 
+export interface RestoreClassCommand extends BaseCommand {
+  command_type: 'RESTORE_CLASS';
+  class_data: UmlClass;
+  relationships: UmlRelationship[];
+}
+
 export type UmlCommand =
   | CreateClassCommand
   | RenameClassCommand
@@ -181,7 +188,8 @@ export type UmlCommand =
   | DeleteAttributeCommand
   | CreateRelationshipCommand
   | UpdateRelationshipCommand
-  | DeleteRelationshipCommand;
+  | DeleteRelationshipCommand
+  | RestoreClassCommand;
 
 export interface CommandExecutionResponse {
   success: boolean;

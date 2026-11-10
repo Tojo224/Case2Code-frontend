@@ -15,7 +15,10 @@ import {
   HelpCircle,
   History,
   FileText,
+  Undo2,
+  Redo2,
 } from 'lucide-react';
+import { useUndoStore } from '../../store/useUndoStore';
 import { CollaboratorAvatars } from '../collaboration/CollaboratorAvatars';
 import { UserMenu } from '../auth/UserMenu';
 import { ThemeToggle } from './ThemeToggle';
@@ -24,6 +27,16 @@ import { useTourStore } from '../../store/useTourStore';
 import { useVersionStore } from '../../store/useVersionStore';
 
 export const Navbar: React.FC = () => {
+  const canUndo = useUndoStore((s) => {
+    const id = useDiagramStore.getState().currentDocument?.id;
+    return !!id && (s.stacks[id]?.undoStack.length ?? 0) > 0;
+  });
+  const canRedo = useUndoStore((s) => {
+    const id = useDiagramStore.getState().currentDocument?.id;
+    return !!id && (s.stacks[id]?.redoStack.length ?? 0) > 0;
+  });
+  const undoAction = useUndoStore((s) => s.undo);
+  const redoAction = useUndoStore((s) => s.redo);
   const {
     currentDocument,
     diagramsList,
@@ -139,6 +152,25 @@ export const Navbar: React.FC = () => {
             >
               <Plus className="w-3.5 h-3.5 shrink-0" />
               <span className="hidden sm:inline">Clase</span>
+            </button>
+
+            <button
+              onClick={() => void undoAction()}
+              disabled={!canUndo}
+              title="Deshacer (Ctrl+Z)"
+              aria-label="Deshacer"
+              className="p-1.5 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md transition shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Undo2 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => void redoAction()}
+              disabled={!canRedo}
+              title="Rehacer (Ctrl+Shift+Z)"
+              aria-label="Rehacer"
+              className="p-1.5 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md transition shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Redo2 className="w-3.5 h-3.5" />
             </button>
 
             <button

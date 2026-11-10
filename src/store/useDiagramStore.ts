@@ -12,6 +12,8 @@ import { CanonicalUmlDocument, UmlClass, UmlCommand, RelationshipType, UmlRelati
 import { api } from '../services/api';
 import { collaborationWs } from '../services/websocket';
 import { useCollaborationStore } from './useCollaborationStore';
+import { useUndoStore } from './useUndoStore';
+import { buildInverse } from './undoLogic';
 import { HOLOGRAM_RESOLUTION_KEY, describeResolveError } from '../components/assistant/aiProposals';
 
 interface DiagramState {
@@ -376,6 +378,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       if (requestId !== latestLoadRequest) return;
       const { nodes, edges } = documentToElements(doc);
       // A hologram belongs to the diagram it was proposed for.
+      useUndoStore.getState().clear();
       set({ currentDocument: doc, nodes, edges, isLoading: false, hologramCommands: null, hologramMessageId: null });
 
       // Connect real-time collaboration
@@ -400,6 +403,14 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       const res = await api.executeCommand(doc.id, command);
       // Single version guard: a slow response must not roll back a newer remote update.
       get().applyRemoteDocument(res.document);
+      try {
+        if (!useUndoStore.getState().isReplaying) {
+          const inv = buildInverse(doc, res.document, command);
+          if (inv) useUndoStore.getState().record(doc.id, inv);
+        }
+      } catch {
+        /* undo history is best-effort */
+      }
     } catch (e: any) {
       set({ error: e.message });
       throw e;
@@ -413,9 +424,30 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
     try {
       set({ error: null });
       let latestDoc = doc;
+      const inverses: UmlCommand[][] = [];
+      let allInvertible = true;
       for (const cmd of commands) {
+        const before = latestDoc;
         const res = await api.executeCommand(latestDoc.id, cmd);
         latestDoc = res.document;
+        try {
+          const inv = buildInverse(before, latestDoc, cmd);
+          if (inv) inverses.push(inv.undo);
+          else allInvertible = false;
+        } catch {
+          allInvertible = false;
+        }
+      }
+      try {
+        if (allInvertible && !useUndoStore.getState().isReplaying) {
+          useUndoStore.getState().record(doc.id, {
+            label: commands.length === 1 ? 'Cambio aplicado' : `${commands.length} cambios aplicados`,
+            undo: inverses.reverse().flat(),
+            redo: commands,
+          });
+        }
+      } catch {
+        /* undo history is best-effort */
       }
       // Clear the hologram first so the guarded apply rebuilds the canvas without it; if the
       // guard rejects a stale response, rebuild from what is already on screen.
@@ -853,6 +885,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
   resetDiagrams: () => {
     collaborationWs.disconnect();
     useCollaborationStore.getState().clearState();
+    useUndoStore.getState().clear();
     set({
       currentDocument: null,
       diagramsList: [],

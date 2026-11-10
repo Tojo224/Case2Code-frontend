@@ -11,6 +11,8 @@ import { CaseAssistantChat } from './components/assistant/CaseAssistantChat';
 import { InviteModal } from './components/collaboration/InviteModal';
 import { AuthModal } from './components/auth/AuthModal';
 import { TourController } from './components/tour/TourController';
+import { UndoShortcuts } from './components/toolbar/UndoShortcuts';
+import { UndoToast } from './components/toolbar/UndoToast';
 import { offerTourWelcome } from './tour/offerWelcome';
 
 export const App: React.FC = () => {
@@ -87,6 +89,8 @@ export const App: React.FC = () => {
 
       {/* Adaptive tutorial: missions checklist, hints and micro-tours */}
       <TourController />
+      <UndoShortcuts />
+      <UndoToast />
     </div>
   );
 };
