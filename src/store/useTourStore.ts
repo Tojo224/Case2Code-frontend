@@ -1,73 +1,166 @@
 import { create } from 'zustand';
+import { nextPendingMission, missionHasTour } from '../tour/missions';
+import {
+  defaultPersisted,
+  loadPersisted,
+  savePersisted,
+  type PersistedTour,
+  type TourMode,
+} from '../tour/tourStorage';
+import { useAuthStore } from './useAuthStore';
 
-interface TourState {
+/** Short, non-blocking message shown when a mission completes. */
+export interface TourNotice {
+  /** Changes on every notice so the card can restart its auto-dismiss timer. */
+  key: number;
+  message: string;
+  /** Mission the "next step" pointer refers to, if any is still pending. */
+  nextMissionId: string | null;
+}
+
+interface TourState extends PersistedTour {
+  /** A micro-tour is running. */
   isActive: boolean;
+  activeMission: string | null;
   isWelcomeOpen: boolean;
-  completed: boolean;
+  notice: TourNotice | null;
+  activeHintId: string | null;
+  /** User id the persisted state was loaded for (`null` = anonymous); `undefined` = never loaded. */
+  loadedFor: string | null | undefined;
+
   initTour: () => void;
   openWelcome: () => void;
   closeWelcome: () => void;
-  start: () => void;
+  /** Starts the micro-tour of a mission (defaults to the first pending one that has a tour). */
+  start: (missionId?: string) => void;
   finish: () => void;
   skip: () => void;
+  /** Re-opens the checklist expanded and offers the micro-tours again. */
   restart: () => void;
+  /** Welcome choice "Explorar por mi cuenta": checklist and hints stay on. */
+  explore: () => void;
+  markWelcomed: () => void;
+  setCollapsed: (collapsed: boolean) => void;
+  hideChecklist: () => void;
+  completeMissions: (ids: string[], at?: number) => void;
+  showNotice: (message: string, nextMissionId: string | null) => void;
+  clearNotice: () => void;
+  showHint: (id: string) => void;
+  clearHint: () => void;
+  disableHints: () => void;
 }
 
-export const STORAGE_KEY_TOUR = 'case2code_tour_done';
+const currentUserId = (): string | null => useAuthStore.getState().currentUser?.id ?? null;
 
-const readDone = (): boolean => {
-  try {
-    return localStorage.getItem(STORAGE_KEY_TOUR) === 'true';
-  } catch {
-    return false;
-  }
-};
+const pickPersisted = (s: PersistedTour): PersistedTour => ({
+  version: s.version,
+  welcomed: s.welcomed,
+  mode: s.mode,
+  collapsed: s.collapsed,
+  completed: s.completed,
+  dismissedHints: s.dismissedHints,
+  hintsDisabled: s.hintsDisabled,
+});
 
-const writeDone = (done: boolean) => {
-  try {
-    if (done) {
-      localStorage.setItem(STORAGE_KEY_TOUR, 'true');
-    } else {
-      localStorage.removeItem(STORAGE_KEY_TOUR);
-    }
-  } catch {
-    // Storage unavailable (private mode, quota): the tour just won't persist.
-  }
-};
-
-export const useTourStore = create<TourState>((set) => ({
+const VOLATILE_DEFAULTS = {
   isActive: false,
+  activeMission: null,
   isWelcomeOpen: false,
-  completed: false,
+  notice: null,
+  activeHintId: null,
+} as const;
 
-  initTour: () => {
-    set({ completed: readDone() });
-  },
+let noticeCounter = 0;
 
-  openWelcome: () => {
-    set({ isWelcomeOpen: true });
-  },
+export const useTourStore = create<TourState>((set, get) => {
+  /** Applies a change and persists the durable part for the current user. */
+  const update = (patch: Partial<TourState>) => {
+    set(patch);
+    const { loadedFor } = get();
+    savePersisted(loadedFor === undefined ? currentUserId() : loadedFor, pickPersisted(get()));
+  };
 
-  closeWelcome: () => {
-    set({ isWelcomeOpen: false });
-  },
+  return {
+    ...defaultPersisted(),
+    ...VOLATILE_DEFAULTS,
+    loadedFor: undefined,
 
-  start: () => {
-    set({ isActive: true, isWelcomeOpen: false });
-  },
+    initTour: () => {
+      const userId = currentUserId();
+      set({ ...loadPersisted(userId), ...VOLATILE_DEFAULTS, loadedFor: userId });
+    },
 
-  finish: () => {
-    writeDone(true);
-    set({ isActive: false, isWelcomeOpen: false, completed: true });
-  },
+    openWelcome: () => set({ isWelcomeOpen: true }),
 
-  skip: () => {
-    writeDone(true);
-    set({ isActive: false, isWelcomeOpen: false, completed: true });
-  },
+    closeWelcome: () => update({ isWelcomeOpen: false, welcomed: true }),
 
-  restart: () => {
-    writeDone(false);
-    set({ isActive: true, isWelcomeOpen: false, completed: false });
-  },
-}));
+    start: (missionId) => {
+      const { completed } = get();
+      const target = missionId ?? nextPendingMission(completed)?.id;
+      if (!target || !missionHasTour(target)) return;
+      update({
+        isActive: true,
+        activeMission: target,
+        isWelcomeOpen: false,
+        welcomed: true,
+        mode: 'adaptive',
+        notice: null,
+        activeHintId: null,
+      });
+    },
+
+    finish: () => set({ isActive: false, activeMission: null }),
+
+    skip: () => {
+      if (get().isWelcomeOpen) get().closeWelcome();
+      set({ isActive: false, activeMission: null });
+    },
+
+    restart: () =>
+      update({
+        ...VOLATILE_DEFAULTS,
+        welcomed: true,
+        mode: 'adaptive' as TourMode,
+        collapsed: false,
+        dismissedHints: [],
+        hintsDisabled: false,
+      }),
+
+    explore: () => update({ isWelcomeOpen: false, welcomed: true, mode: 'adaptive' }),
+
+    markWelcomed: () => update({ welcomed: true }),
+
+    setCollapsed: (collapsed) => update({ collapsed }),
+
+    hideChecklist: () => update({ mode: 'off', activeHintId: null, notice: null }),
+
+    completeMissions: (ids, at = Date.now()) => {
+      const completed = { ...get().completed };
+      let changed = false;
+      for (const id of ids) {
+        if (!(id in completed)) {
+          completed[id] = at;
+          changed = true;
+        }
+      }
+      if (changed) update({ completed });
+    },
+
+    showNotice: (message, nextMissionId) =>
+      set({ notice: { key: ++noticeCounter, message, nextMissionId } }),
+
+    clearNotice: () => set({ notice: null }),
+
+    showHint: (id) => {
+      const { dismissedHints } = get();
+      update({
+        activeHintId: id,
+        dismissedHints: dismissedHints.includes(id) ? dismissedHints : [...dismissedHints, id],
+      });
+    },
+
+    clearHint: () => set({ activeHintId: null }),
+
+    disableHints: () => update({ hintsDisabled: true, activeHintId: null }),
+  };
+});

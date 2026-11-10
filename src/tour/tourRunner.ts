@@ -1,29 +1,49 @@
 import { driver, type DriveStep } from 'driver.js';
 import 'driver.js/dist/driver.css';
+import { useCollaborationStore } from '../store/useCollaborationStore';
 import { useDiagramStore } from '../store/useDiagramStore';
 import { useTourStore } from '../store/useTourStore';
-import { buildTourSteps, takeSnapshot, tourSelector, type TourSnapshot, type TourStepDef } from './tourSteps';
+import { useVersionStore } from '../store/useVersionStore';
+import { getMission } from './missions';
+import { getMicroTour, takeSnapshot, tourSelector, type TourSnapshot, type TourStepDef } from './tourSteps';
 
 const WAIT_MS = 2500;
 const AUTO_ADVANCE_DELAY_MS = 350;
+const END_DELAY_MS = 500;
 const LAYOUT_REFRESH_DELAY_MS = 300;
 
 type Direction = 'forward' | 'back';
 
+const prefersReducedMotion = () =>
+  typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 /**
- * Starts the guided tour and returns a disposer. All the step logic lives in
- * `tourSteps.ts`; this module only wires driver.js, the stores and the keyboard.
+ * Runs the micro-tour of one mission and returns a disposer. All the step logic lives in
+ * `tourSteps.ts`; this module only wires driver.js, the stores and the keyboard. The tour
+ * highlights one thing at a time and ends by itself when its task is done.
  */
-export const runTour = (): (() => void) => {
-  const defs = buildTourSteps(takeSnapshot().hasDocument);
-  const indexById = new Map(defs.map((d, i) => [d.id, i]));
+export const runMicroTour = (missionId: string): (() => void) => {
+  const tour = getMicroTour(missionId);
+  const mission = getMission(missionId);
+  const defs = tour?.steps ?? [];
+  const finishNow = () => useTourStore.getState().finish();
+
+  // Nothing to show (unknown mission, or its only anchor is not on screen): end quietly.
+  const first = defs[0];
+  if (!first || (first.optional && !first.wait && !document.querySelector(tourSelector(first.target ?? '')))) {
+    window.setTimeout(finishNow, 0);
+    return () => undefined;
+  }
 
   let baseline: TourSnapshot = takeSnapshot();
+  const doneAtStart = mission?.detect(baseline) ?? false;
   let armed = true;
   let direction: Direction = 'forward';
   let advanceTimer: number | undefined;
   let layoutTimer: number | undefined;
+  let endTimer: number | undefined;
   let disposed = false;
+  const reduceMotion = prefersReducedMotion();
 
   const toDriveStep = (def: TourStepDef): DriveStep => ({
     element: def.target
@@ -42,6 +62,7 @@ export const runTour = (): (() => void) => {
   });
 
   const isDone = (def: TourStepDef) => def.done?.(takeSnapshot(), baseline) ?? false;
+  const isLast = (index: number) => index >= defs.length - 1;
 
   const goTo = (from: number, to: number, dir: Direction) => {
     if (disposed || drv.getActiveIndex() !== from) return;
@@ -53,21 +74,15 @@ export const runTour = (): (() => void) => {
     drv.moveTo(to);
   };
 
-  const nextIndexFor = (index: number) => {
-    const def = defs[index];
-    const target = def.doneGoTo && isDone(def) ? indexById.get(def.doneGoTo) : undefined;
-    return target ?? index + 1;
-  };
-
   const handleNext = (index: number) => {
     const def = defs[index];
     if (!def) return;
     if (def.done && !isDone(def)) def.onSkipTask?.();
-    if (index >= defs.length - 1) {
-      useTourStore.getState().finish();
+    if (isLast(index)) {
+      finishNow();
       return;
     }
-    goTo(index, nextIndexFor(index), 'forward');
+    goTo(index, index + 1, 'forward');
   };
 
   const handlePrev = (index: number) => {
@@ -75,8 +90,21 @@ export const runTour = (): (() => void) => {
     goTo(index, index - 1, 'back');
   };
 
-  const scheduleAutoAdvance = () => {
+  const scheduleEnd = () => {
+    if (endTimer !== undefined) return;
+    endTimer = window.setTimeout(() => {
+      if (!disposed) finishNow();
+    }, END_DELAY_MS);
+  };
+
+  const onStoreChange = () => {
     if (disposed) return;
+    // The task of the whole mission is done: let the user see the result, then leave.
+    if (tour?.endOnMission && !doneAtStart && mission?.detect(takeSnapshot())) {
+      scheduleEnd();
+      return;
+    }
+
     const index = drv.getActiveIndex();
     if (index === undefined) return;
     const def = defs[index];
@@ -92,28 +120,28 @@ export const runTour = (): (() => void) => {
     window.clearTimeout(advanceTimer);
     advanceTimer = window.setTimeout(() => {
       if (disposed || drv.getActiveIndex() !== index || !isDone(def)) return;
-      goTo(index, nextIndexFor(index), 'forward');
+      if (isLast(index)) finishNow();
+      else goTo(index, index + 1, 'forward');
     }, AUTO_ADVANCE_DELAY_MS);
   };
 
-  const addSkipButton = (wrapper: HTMLElement, index: number | undefined) => {
-    if (index === undefined || index >= defs.length - 1) return;
-    const skip = document.createElement('button');
-    skip.type = 'button';
-    skip.className = 'c2c-tour-skip';
-    skip.textContent = 'Saltar tutorial';
-    skip.addEventListener('click', () => useTourStore.getState().skip());
-    wrapper.appendChild(skip);
+  const addExitButton = (wrapper: HTMLElement) => {
+    const exit = document.createElement('button');
+    exit.type = 'button';
+    exit.className = 'c2c-tour-skip';
+    exit.textContent = 'Salir de la guía';
+    exit.addEventListener('click', () => useTourStore.getState().skip());
+    wrapper.appendChild(exit);
   };
 
   const drv = driver({
     steps: defs.map(toDriveStep),
-    showProgress: true,
+    showProgress: defs.length > 1,
     progressText: 'paso {{current}} de {{total}}',
     nextBtnText: 'Siguiente',
     prevBtnText: 'Atrás',
     doneBtnText: '¡Listo!',
-    closeBtnLabel: 'Cerrar tutorial',
+    closeBtnLabel: 'Cerrar guía',
     popoverClass: 'c2c-tour',
     allowClose: true,
     // Arrow keys would hijack text inputs; Esc is handled below.
@@ -122,7 +150,8 @@ export const runTour = (): (() => void) => {
     overlayOpacity: 0.6,
     stagePadding: 6,
     stageRadius: 8,
-    smoothScroll: true,
+    animate: !reduceMotion,
+    smoothScroll: !reduceMotion,
     onHighlightStarted: (_el, _step, { index }) => {
       const def = index !== undefined ? defs[index] : undefined;
       if (!def) return;
@@ -132,13 +161,13 @@ export const runTour = (): (() => void) => {
       // Layout may shift (sidebar expanding, modals animating): re-measure shortly after.
       window.clearTimeout(layoutTimer);
       layoutTimer = window.setTimeout(() => drv.refresh(), LAYOUT_REFRESH_DELAY_MS);
-      scheduleAutoAdvance();
+      onStoreChange();
     },
     onHighlighted: (el, _step, { index }) => {
       // The popover grabs focus when it renders; give it back to modal inputs.
       if (index !== undefined && defs[index]?.focusTarget && el instanceof HTMLElement) el.focus();
     },
-    onPopoverRender: (popover, { index }) => addSkipButton(popover.wrapper, index),
+    onPopoverRender: (popover) => addExitButton(popover.wrapper),
     onNextClick: (_el, _step, { index }) => {
       if (index !== undefined) handleNext(index);
     },
@@ -166,7 +195,11 @@ export const runTour = (): (() => void) => {
   };
   window.addEventListener('keydown', onKeyDown);
 
-  const unsubscribe = useDiagramStore.subscribe(scheduleAutoAdvance);
+  const unsubscribers = [
+    useDiagramStore.subscribe(onStoreChange),
+    useCollaborationStore.subscribe(onStoreChange),
+    useVersionStore.subscribe(onStoreChange),
+  ];
 
   drv.drive(0);
 
@@ -174,9 +207,10 @@ export const runTour = (): (() => void) => {
     disposed = true;
     window.clearTimeout(advanceTimer);
     window.clearTimeout(layoutTimer);
+    window.clearTimeout(endTimer);
     window.removeEventListener('keyup', onKeyUp);
     window.removeEventListener('keydown', onKeyDown);
-    unsubscribe();
+    unsubscribers.forEach((unsubscribe) => unsubscribe());
     try {
       drv.destroy();
     } catch {

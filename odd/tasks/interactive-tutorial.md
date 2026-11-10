@@ -75,3 +75,14 @@ In: `src/` of this frontend repo only. Out: backend, docs repo, i18n.
 
 ## Next step
 Decide on the review advisories and T5 (contextual tips). Light-mode and small-width checks still pending. Push / PR are the user's call.
+
+## Adaptive redesign (replaces the linear 19-step autoplay)
+Problem: the linear tour showed everything up front and forced each step. Now the tutorial adapts to what the user does.
+- Missions ("Primeros pasos", 9, detected from store state, never forced): create-project, first-class, add-attributes, second-class, first-relationship, ask-ai, generate-code, save-version, invite-team. Pure `detect(snapshot)` in `src/tour/missions.ts`; snapshot extended in `tourSteps.ts` (`takeSnapshot`, also reads collaboration and version stores).
+- Micro-tours: the existing step definitions split per mission (`getMicroTour`), run by `runMicroTour` in `tourRunner.ts` only on "Mostrame como"; one highlight at a time, ends by itself when the task is done. Click-through CSS, Ctrl+Enter forwarding, Esc and relationship detection kept. `save-version` targets `data-tour="navbar-history"` (optional step: skipped if the anchor is missing).
+- Hints: pure `pickHint(snapshot, progress, now)` in `hints.ts`: max 1 hint, 90 s cooldown, max 3 per session, never with a modal or micro-tour open, each hint shown once ever, "Ahora no" / "No mostrar mas consejos". Rules: hologram proposal (explain "Aplicar al Diagrama"), 2+ classes and 0 relationships for 20 s, class with only the id for 30 s, relationships but no code generation for 30 s, 8+ edits without a version.
+- Welcome: two-choice non-modal card ("Guiarme paso a paso" / "Explorar por mi cuenta"), only for users with no classes anywhere and not welcomed before (`decideWelcome`); experienced users are silently marked welcomed and their missions auto-complete without toasts.
+- Persistence: `case2code_tour_v2:<userId|anon>` (version, welcomed, mode, collapsed, completed ids with timestamps, dismissedHints, hintsDisabled); legacy `case2code_tour_done=true` migrates to `welcomed`. `restart()` (help button) re-opens the checklist expanded and re-enables hints; the old linear flow, `completed` flag and welcome modal were removed.
+- Feedback/a11y: mission toast with pointer to the next mission, `role=status aria-live=polite`, reduced-motion respected, no focus trap outside micro-tours, bottom-left stack never blocks the canvas.
+- Evidence: `npx vitest run` 9 files / 80 passed, `npx tsc --noEmit` clean, `npm run build` OK. Browser behaviour NOT verified (no backend). Pending: `navbar-history` anchor owned by the version-control work; light-mode / phone-width visual check.
+

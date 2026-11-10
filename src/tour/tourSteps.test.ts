@@ -1,68 +1,94 @@
 import { describe, it, expect } from 'vitest';
-import { buildTourSteps, type TourSnapshot } from './tourSteps';
+import { EMPTY_SNAPSHOT, getMicroTour, hasMicroTour, hasOpenModal, type TourSnapshot } from './tourSteps';
+import { MISSIONS } from './missions';
 
 const snap = (overrides: Partial<TourSnapshot> = {}): TourSnapshot => ({
+  ...EMPTY_SNAPSHOT,
   hasDocument: true,
-  classCount: 0,
-  relationshipCount: 0,
-  isCreateClassModalOpen: false,
-  hasEditingRelationship: false,
-  activeRelationType: null,
+  documentId: 'd1',
   ...overrides,
 });
 
-describe('buildTourSteps', () => {
-  it('only includes the create-project step when there is no project', () => {
-    expect(buildTourSteps(false).some((s) => s.id === 'create-project')).toBe(true);
-    expect(buildTourSteps(true).some((s) => s.id === 'create-project')).toBe(false);
-  });
+const step = (missionId: string, stepId: string) => {
+  const found = getMicroTour(missionId)!.steps.find((s) => s.id === stepId);
+  expect(found).toBeDefined();
+  return found!;
+};
 
-  it('has unique ids and valid doneGoTo targets', () => {
-    const steps = buildTourSteps(false);
-    const ids = steps.map((s) => s.id);
-    expect(new Set(ids).size).toBe(ids.length);
-    for (const s of steps) {
-      if (s.doneGoTo) expect(ids).toContain(s.doneGoTo);
+describe('micro-tours', () => {
+  it('every mission has a micro-tour made of known, unique steps', () => {
+    for (const m of MISSIONS) {
+      expect(hasMicroTour(m.id)).toBe(true);
+      const tour = getMicroTour(m.id)!;
+      expect(tour.steps.length).toBeGreaterThan(0);
+      const ids = tour.steps.map((s) => s.id);
+      expect(new Set(ids).size).toBe(ids.length);
     }
+    expect(getMicroTour('nope')).toBeNull();
   });
 
-  it('starts centered and ends on the help button', () => {
-    const steps = buildTourSteps(true);
-    expect(steps[0].target).toBeUndefined();
-    expect(steps[steps.length - 1].target).toBe('help-button');
+  it('splits the class creation flow and keeps the relationship flow in order', () => {
+    expect(getMicroTour('first-class')!.steps.map((s) => s.id)).toEqual([
+      'add-class',
+      'class-name',
+      'class-attributes',
+      'class-submit',
+    ]);
+    expect(getMicroTour('first-relationship')!.steps.map((s) => s.id)).toEqual([
+      'relation-tool',
+      'relation-drag',
+      'relation-edit',
+      'relation-modal',
+      'relation-save',
+    ]);
+  });
+
+  it('the history step is optional so it is skipped when the anchor is missing', () => {
+    expect(step('save-version', 'save-version').optional).toBe(true);
+    expect(step('save-version', 'save-version').target).toBe('navbar-history');
   });
 
   it('detects a created class only after the modal closed with more classes', () => {
-    const submit = buildTourSteps(true).find((s) => s.id === 'class-submit')!;
+    const submit = step('first-class', 'class-submit');
     const base = snap({ classCount: 1 });
     expect(submit.done!(snap({ classCount: 2, isCreateClassModalOpen: true }), base)).toBe(false);
     expect(submit.done!(snap({ classCount: 1 }), base)).toBe(false);
     expect(submit.done!(snap({ classCount: 2 }), base)).toBe(true);
   });
 
-  it('advances after connecting (a relationship is created, no modal opens) and then offers to edit it', () => {
-    const steps = buildTourSteps(true);
-    const drag = steps.find((s) => s.id === 'relation-drag')!;
+  it('advances after connecting (no modal opens) and then offers to edit the relationship', () => {
+    const drag = step('first-relationship', 'relation-drag');
     const base = snap({ relationshipCount: 0 });
     expect(drag.done!(snap({ relationshipCount: 0 }), base)).toBe(false);
     expect(drag.done!(snap({ relationshipCount: 1 }), base)).toBe(true);
 
-    const ids = steps.map((s) => s.id);
-    expect(ids.indexOf('relation-edit')).toBe(ids.indexOf('relation-drag') + 1);
-    const edit = steps.find((s) => s.id === 'relation-edit')!;
+    const edit = step('first-relationship', 'relation-edit');
     expect(edit.target).toBe('relation-edge');
     expect(edit.done!(snap({ hasEditingRelationship: true }), base)).toBe(true);
     expect(edit.onSkipTask).toBeTypeOf('function');
+    // The tour keeps going after the relationship exists so the user can see how to edit it.
+    expect(getMicroTour('first-relationship')!.endOnMission).toBe(false);
   });
 
-  it('every task step has a fallback so Next never dead-ends', () => {
-    const steps = buildTourSteps(false);
-    for (const s of steps) {
-      if (s.done && s.interactive) {
-        // Steps whose modal is opened by the tour need onSkipTask; pure observation steps may omit it.
-        const needsFallback = ['create-project', 'add-class', 'second-class', 'relation-tool', 'relation-edit'].includes(s.id);
-        if (needsFallback) expect(s.onSkipTask).toBeTypeOf('function');
-      }
-    }
+  it('task steps that need the tour to open something have a Next fallback', () => {
+    const needsFallback: Array<[string, string]> = [
+      ['create-project', 'create-project'],
+      ['first-class', 'add-class'],
+      ['second-class', 'second-class'],
+      ['first-relationship', 'relation-tool'],
+      ['first-relationship', 'relation-edit'],
+      ['ask-ai', 'ai-open'],
+      ['generate-code', 'generate-code'],
+      ['save-version', 'save-version'],
+      ['invite-team', 'invite-team'],
+    ];
+    for (const [mission, id] of needsFallback) expect(step(mission, id).onSkipTask).toBeTypeOf('function');
+  });
+
+  it('knows when a modal is in front of the canvas', () => {
+    expect(hasOpenModal(snap())).toBe(false);
+    expect(hasOpenModal(snap({ isCreateClassModalOpen: true }))).toBe(true);
+    expect(hasOpenModal(snap({ hasEditingRelationship: true }))).toBe(true);
+    expect(hasOpenModal(snap({ isVersionPanelOpen: true }))).toBe(true);
   });
 });
