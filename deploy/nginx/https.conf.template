@@ -1,0 +1,50 @@
+# TLS mode (TLS_DOMAIN set). ${TLS_DOMAIN} and ${TLS_CERT}/${TLS_KEY} are filled in by
+# 40-case2code-config.sh. Port 80 only answers Let's Encrypt, the health check and redirects.
+
+map $scheme $hsts {
+    https   "max-age=31536000";
+    default "";
+}
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+log_format case2code '$remote_addr [$time_local] "$request_method $uri" $status $body_bytes_sent';
+
+server {
+    # In the server block so it REPLACES the default `access_log ... main` of nginx.conf
+    # (which would log the full URI, token included).
+    access_log /var/log/nginx/access.log case2code;
+    listen 80 default_server;
+    server_name ${TLS_DOMAIN};
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location = /healthz {
+        access_log off;
+        return 200 "ok\n";
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    access_log /var/log/nginx/access.log case2code;
+    listen 443 ssl default_server;
+    http2 on;
+    server_name ${TLS_DOMAIN};
+
+    ssl_certificate     ${TLS_CERT};
+    ssl_certificate_key ${TLS_KEY};
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    include /etc/nginx/case2code/app.conf;
+}
