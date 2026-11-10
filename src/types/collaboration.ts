@@ -1,4 +1,5 @@
 import { CanonicalUmlDocument, UmlCommand } from './uml';
+import type { SuggestedOperation } from './versions';
 
 export type CollaboratorRole = 'OWNER' | 'EDITOR' | 'VIEWER';
 
@@ -52,6 +53,7 @@ export interface ChatMessage {
   ai_engine?: string | null;
   executed_commands?: UmlCommand[] | null;
   suggested_commands?: UmlCommand[] | null;
+  suggested_operations?: SuggestedOperation[] | null;
   applied_commands_count?: number;
   created_at: string;
 }
