@@ -96,6 +96,40 @@ export const takeSnapshot = (): TourSnapshot => {
   };
 };
 
+/**
+ * References of every store field takeSnapshot() reads. The stores emit on every cursor move,
+ * node drag or typing indicator; comparing these references first lets callers skip the
+ * snapshot (which walks every class) when nothing it depends on has changed.
+ */
+export const snapshotInputs = (): readonly unknown[] => {
+  const s = useDiagramStore.getState();
+  const collab = useCollaborationStore.getState();
+  const versions = useVersionStore.getState();
+  return [
+    s.isLoading,
+    s.currentDocument,
+    s.diagramsList,
+    s.isCreateClassModalOpen,
+    s.editingRelationship,
+    s.activeRelationType,
+    s.isSqlModalOpen,
+    s.isGenerating,
+    s.isGeneratingMobile,
+    s.isAssistantOpen,
+    s.hologramCommands,
+    collab.chatMessages,
+    collab.isInviteModalOpen,
+    collab.collaborators,
+    collab.isAuthModalOpen,
+    versions.versions,
+    versions.isPanelOpen,
+    useAuthStore.getState().currentUser?.id,
+  ];
+};
+
+export const sameInputs = (a: readonly unknown[] | null, b: readonly unknown[]): boolean =>
+  !!a && a.length === b.length && a.every((value, index) => Object.is(value, b[index]));
+
 /** True while any modal-like surface is in front of the canvas. */
 export const hasOpenModal = (snap: TourSnapshot): boolean =>
   snap.isCreateClassModalOpen ||

@@ -13,7 +13,7 @@ import {
   type HintProgress,
 } from './hints';
 import { buildMissionNotice, evaluateMissions } from './missions';
-import { takeSnapshot, type TourSnapshot } from './tourSteps';
+import { sameInputs, snapshotInputs, takeSnapshot, type TourSnapshot } from './tourSteps';
 
 const HINT_TICK_MS = 5_000;
 
@@ -34,15 +34,22 @@ export const useAdaptiveTour = () => {
     if (!userId) return;
 
     let prev: TourSnapshot | null = null;
+    let lastInputs: readonly unknown[] | null = null;
     let edits = 0;
     let holdSince: Partial<Record<HintId, number>> = {};
     let lastHintAt: number | null = null;
     let shownThisSession = 0;
 
     const detectMissions = () => {
+      // The stores also emit for cursors, drags and typing: skip when nothing the snapshot reads changed.
+      const inputs = snapshotInputs();
+      if (sameInputs(lastInputs, inputs)) return;
+
       const tour = useTourStore.getState();
       // Wait for the user's own state to be loaded and for projects to finish loading.
+      // Inputs are only remembered after this guard, so a skipped run is retried.
       if (tour.loadedFor !== userId || useDiagramStore.getState().isLoading) return;
+      lastInputs = inputs;
 
       const snap = takeSnapshot();
       const { newlyDone, announce } = evaluateMissions(prev, snap, tour.completed);
