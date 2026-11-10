@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useDiagramStore } from './useDiagramStore';
 import { CanonicalUmlDocument } from '../types/uml';
 import { api } from '../services/api';
+import { useCollaborationStore } from './useCollaborationStore';
+import type { ChatMessage } from '../types/collaboration';
 
 vi.mock('../services/api', () => ({
   api: {
@@ -9,6 +11,8 @@ vi.mock('../services/api', () => ({
     createDiagram: vi.fn(),
     getDiagram: vi.fn(),
     executeCommand: vi.fn(),
+    executeCommandsBatch: vi.fn(),
+    resolveProposal: vi.fn(),
     downloadBackendZip: vi.fn(),
     downloadMobileAppZip: vi.fn(),
     sendAssistantPrompt: vi.fn(),
@@ -68,7 +72,11 @@ describe('useDiagramStore', () => {
       edges: [],
       isLoading: false,
       error: null,
+      hologramCommands: null,
+      hologramMessageId: null,
+      isApplyingHologram: false,
     });
+    useCollaborationStore.getState().clearState();
   });
 
   it('loads a diagram and creates corresponding nodes and edges', async () => {
@@ -224,6 +232,166 @@ describe('useDiagramStore', () => {
     expect(useDiagramStore.getState().isSqlModalOpen).toBe(true);
     useDiagramStore.getState().closeSqlModal();
     expect(useDiagramStore.getState().isSqlModalOpen).toBe(false);
+  });
+
+  describe('hologram apply', () => {
+    const holoCmds = [
+      { command_type: 'CREATE_CLASS', class_id: 'c-new', name: 'Reserva' },
+      { command_type: 'CREATE_CLASS', class_id: 'c-bad', name: 'Cliente' },
+    ] as never[];
+    const docWithReserva: CanonicalUmlDocument = {
+      ...sampleDoc,
+      version: 2,
+      classes: [
+        ...sampleDoc.classes,
+        { id: 'c-new', name: 'Reserva', position: { x: 300, y: 150 }, attributes: [], is_abstract: false },
+      ],
+    };
+    const chatMessage = { id: 'm1', diagram_id: 'diag-1', sender_type: 'AI' } as ChatMessage;
+
+    beforeEach(() => {
+      useDiagramStore.setState({ currentDocument: sampleDoc });
+      useDiagramStore.getState().setHologramCommands(holoCmds);
+    });
+
+    it('applies through a single batch call and clears the hologram', async () => {
+      vi.mocked(api.executeCommandsBatch).mockResolvedValue({
+        document: docWithReserva,
+        applied: [holoCmds[0], holoCmds[1]],
+        skipped: [],
+      });
+
+      await useDiagramStore.getState().applyHologram();
+
+      expect(api.executeCommandsBatch).toHaveBeenCalledTimes(1);
+      expect(api.executeCommandsBatch).toHaveBeenCalledWith('diag-1', holoCmds);
+      const s = useDiagramStore.getState();
+      expect(s.currentDocument?.version).toBe(2);
+      expect(s.hologramCommands).toBeNull();
+      expect(s.isApplyingHologram).toBe(false);
+      expect(s.nodes.some((n) => (n.data as any).isHologram)).toBe(false);
+    });
+
+    it('syncs the document, clears the hologram and reports skipped commands on partial apply', async () => {
+      vi.mocked(api.executeCommandsBatch).mockResolvedValue({
+        document: docWithReserva,
+        applied: [holoCmds[0]],
+        skipped: [{ command: holoCmds[1], reason: 'duplicate' }],
+      });
+
+      await useDiagramStore.getState().applyHologram();
+
+      const s = useDiagramStore.getState();
+      expect(s.currentDocument?.version).toBe(2);
+      expect(s.hologramCommands).toBeNull();
+      expect(s.error).toContain('1 cambios');
+      expect(s.error).toContain('omitieron 1');
+    });
+
+    it('keeps the hologram when nothing could be applied', async () => {
+      vi.mocked(api.executeCommandsBatch).mockResolvedValue({
+        document: { ...sampleDoc, version: 2 },
+        applied: [],
+        skipped: [{ command: holoCmds[0], reason: 'x' }, { command: holoCmds[1], reason: 'y' }],
+      });
+
+      await useDiagramStore.getState().applyHologram();
+
+      const s = useDiagramStore.getState();
+      expect(s.hologramCommands).toEqual(holoCmds);
+      expect(s.currentDocument?.version).toBe(2);
+      expect(s.error).toContain('omitieron 2');
+    });
+
+    it('keeps the hologram on failure and resyncs the document', async () => {
+      vi.mocked(api.executeCommandsBatch).mockRejectedValue(new Error('boom'));
+      vi.mocked(api.getDiagram).mockResolvedValue({ ...sampleDoc, version: 2 });
+
+      await useDiagramStore.getState().applyHologram();
+
+      const s = useDiagramStore.getState();
+      expect(s.hologramCommands).toEqual(holoCmds);
+      expect(s.error).toBe('boom');
+      expect(api.getDiagram).toHaveBeenCalledWith('diag-1');
+      expect(s.currentDocument?.version).toBe(2);
+      expect(s.isApplyingHologram).toBe(false);
+      // still previewed on the canvas on top of the resynced document
+      expect(s.nodes.some((n) => (n.data as any).isHologram)).toBe(true);
+    });
+
+    it('ignores a second click while the first apply is running', async () => {
+      let release!: (v: any) => void;
+      vi.mocked(api.executeCommandsBatch).mockReturnValue(new Promise((r) => (release = r)));
+
+      const first = useDiagramStore.getState().applyHologram();
+      expect(useDiagramStore.getState().isApplyingHologram).toBe(true);
+      await useDiagramStore.getState().applyHologram();
+      release({ document: docWithReserva, applied: holoCmds, skipped: [] });
+      await first;
+
+      expect(api.executeCommandsBatch).toHaveBeenCalledTimes(1);
+    });
+
+    it('resolves server-side when the hologram came from a chat message', async () => {
+      useDiagramStore.getState().setHologramCommands(holoCmds, 'm1');
+      expect(useDiagramStore.getState().hologramMessageId).toBe('m1');
+      vi.mocked(api.resolveProposal).mockResolvedValue({
+        message: {
+          ...chatMessage,
+          resolutions: { hologram: { status: 'APPLIED', by_id: 'u', by_name: 'Ana', at: 'x', applied_count: 2 } },
+        },
+        document: docWithReserva,
+        applied_count: 2,
+        skipped: [],
+      });
+
+      await useDiagramStore.getState().applyHologram();
+
+      expect(api.executeCommandsBatch).not.toHaveBeenCalled();
+      expect(api.resolveProposal).toHaveBeenCalledWith('diag-1', 'm1', { target: 'hologram', action: 'APPLY' });
+      const s = useDiagramStore.getState();
+      expect(s.hologramCommands).toBeNull();
+      expect(s.hologramMessageId).toBeNull();
+      expect(useCollaborationStore.getState().chatMessages.find((m) => m.id === 'm1')?.resolutions?.hologram).toBeDefined();
+    });
+
+    it('clears the hologram when the server says somebody already resolved it (409)', async () => {
+      useDiagramStore.getState().setHologramCommands(holoCmds, 'm1');
+      vi.mocked(api.resolveProposal).mockRejectedValue(
+        Object.assign(new Error('resolved'), {
+          status: 409,
+          body: {
+            message: {
+              ...chatMessage,
+              resolutions: { hologram: { status: 'DISCARDED', by_id: 'u', by_name: 'Ana', at: 'x' } },
+            },
+          },
+        }),
+      );
+      vi.mocked(api.getDiagram).mockResolvedValue(sampleDoc);
+
+      await useDiagramStore.getState().applyHologram();
+
+      const s = useDiagramStore.getState();
+      expect(s.hologramCommands).toBeNull();
+      expect(s.error).toBe('Descartado por Ana');
+    });
+
+    it('keeps the hologram nodes when a remote or echoed document arrives', () => {
+      useDiagramStore.getState().applyRemoteDocument({ ...sampleDoc, version: 2 });
+      expect(useDiagramStore.getState().hologramCommands).toEqual(holoCmds);
+      expect(useDiagramStore.getState().nodes.some((n) => (n.data as any).isHologram)).toBe(true);
+    });
+
+    it('keeps the hologram nodes after dispatching a command', async () => {
+      vi.mocked(api.executeCommand).mockResolvedValue({
+        success: true,
+        version: 2,
+        document: { ...sampleDoc, version: 2 },
+      });
+      await useDiagramStore.getState().dispatchCommand({ command_type: 'MOVE_CLASS', class_id: 'c-1', position: { x: 1, y: 2 } } as never);
+      expect(useDiagramStore.getState().nodes.some((n) => (n.data as any).isHologram)).toBe(true);
+    });
   });
 
   it('generates and downloads the generic Flutter mobile application zip', async () => {

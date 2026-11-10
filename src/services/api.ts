@@ -6,9 +6,35 @@ import {
   SqlPreviewResponse,
   UmlCommand,
 } from '../types/uml';
-import { AiProviderStatus, ChatHistoryResponse, ProjectCollaborator } from '../types/collaboration';
+import {
+  AiProviderStatus,
+  BatchCommandsResponse,
+  ChatHistoryResponse,
+  ProjectCollaborator,
+  ResolveProposalRequest,
+  ResolveProposalResponse,
+} from '../types/collaboration';
 
 const BASE_URL = '/api';
+
+/** HTTP error that keeps the status and parsed body (e.g. 409 carries the updated chat message). */
+export class ApiError extends Error {
+  status: number;
+  body: any;
+
+  constructor(message: string, status: number, body?: any) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.body = body;
+  }
+}
+
+async function throwApiError(res: Response, fallback: string): Promise<never> {
+  const body = await res.json().catch(() => null);
+  const detail = body && typeof body.detail === 'string' ? body.detail : fallback;
+  throw new ApiError(detail, res.status, body);
+}
 
 function getAuthHeaders(): HeadersInit {
   const token = localStorage.getItem('case2code_token');
@@ -58,6 +84,30 @@ export const api = {
       const errData = await res.json().catch(() => ({ detail: 'Unknown error' }));
       throw new Error(errData.detail || 'Command execution failed');
     }
+    return res.json();
+  },
+
+  async executeCommandsBatch(diagramId: string, commands: UmlCommand[]): Promise<BatchCommandsResponse> {
+    const res = await fetch(`${BASE_URL}/diagrams/${diagramId}/commands/batch`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ commands }),
+    });
+    if (!res.ok) await throwApiError(res, 'Command execution failed');
+    return res.json();
+  },
+
+  async resolveProposal(
+    diagramId: string,
+    messageId: string,
+    payload: ResolveProposalRequest,
+  ): Promise<ResolveProposalResponse> {
+    const res = await fetch(`${BASE_URL}/diagrams/${diagramId}/chat/${messageId}/resolve`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) await throwApiError(res, 'Could not resolve proposal');
     return res.json();
   },
 
