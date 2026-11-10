@@ -69,6 +69,8 @@ interface DiagramState {
 
   // Enterprise Architect XMI Interchange
   isExportingXmi: boolean;
+  isExportingDocs: boolean;
+  exportDocs: () => Promise<void>;
   isImportingXmi: boolean;
   exportXmi: () => Promise<void>;
   importXmi: (file: File) => Promise<void>;
@@ -739,6 +741,19 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
 
   isExportingXmi: false,
   isImportingXmi: false,
+  isExportingDocs: false,
+
+  exportDocs: async () => {
+    const doc = get().currentDocument;
+    if (!doc) return;
+    try {
+      set({ isExportingDocs: true, error: null });
+      await api.exportDataDictionary(doc.id, doc.name);
+      set({ isExportingDocs: false });
+    } catch (e: any) {
+      set({ error: e.message, isExportingDocs: false });
+    }
+  },
 
   exportXmi: async () => {
     const doc = get().currentDocument;

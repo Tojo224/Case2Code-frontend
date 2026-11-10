@@ -17,6 +17,7 @@ vi.mock('../services/api', () => ({
     downloadMobileAppZip: vi.fn(),
     sendAssistantPrompt: vi.fn(),
     exportXmi: vi.fn(),
+    exportDataDictionary: vi.fn(),
     importXmi: vi.fn(),
     importNewDiagramXmi: vi.fn(),
     getSqlPreview: vi.fn(),
@@ -178,6 +179,22 @@ describe('useDiagramStore', () => {
 
     expect(api.exportXmi).toHaveBeenCalledWith('diag-1', 'Peluqueria');
     expect(useDiagramStore.getState().isExportingXmi).toBe(false);
+  });
+
+  it('exports data dictionary PDF and stores error on failure', async () => {
+    useDiagramStore.setState({ currentDocument: sampleDoc });
+    vi.mocked(api.exportDataDictionary).mockResolvedValue();
+
+    await useDiagramStore.getState().exportDocs();
+
+    expect(api.exportDataDictionary).toHaveBeenCalledWith('diag-1', 'Peluqueria');
+    expect(useDiagramStore.getState().isExportingDocs).toBe(false);
+
+    vi.mocked(api.exportDataDictionary).mockRejectedValue(new Error('boom'));
+    await useDiagramStore.getState().exportDocs();
+
+    expect(useDiagramStore.getState().error).toBe('boom');
+    expect(useDiagramStore.getState().isExportingDocs).toBe(false);
   });
 
   it('imports XMI into current diagram and updates nodes and edges', async () => {

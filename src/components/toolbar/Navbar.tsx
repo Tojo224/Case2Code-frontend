@@ -14,6 +14,7 @@ import {
   FileUp,
   HelpCircle,
   History,
+  FileText,
 } from 'lucide-react';
 import { CollaboratorAvatars } from '../collaboration/CollaboratorAvatars';
 import { UserMenu } from '../auth/UserMenu';
@@ -43,6 +44,8 @@ export const Navbar: React.FC = () => {
     importNewDiagramXmi,
     isExportingXmi,
     isImportingXmi,
+    exportDocs,
+    isExportingDocs,
   } = useDiagramStore();
 
   const currentUser = useAuthStore((s) => s.currentUser);
@@ -161,6 +164,20 @@ export const Navbar: React.FC = () => {
             >
               <Database className="w-3.5 h-3.5 shrink-0" />
               <span className="hidden sm:inline">SQL</span>
+            </button>
+
+            <button
+              onClick={exportDocs}
+              disabled={isExportingDocs || !currentDocument || currentDocument.classes.length === 0}
+              title="Descargar diccionario de datos y reglas de negocio (PDF)"
+              className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold px-2.5 py-1.5 rounded-md shadow-sm transition cursor-pointer shrink-0 whitespace-nowrap"
+            >
+              {isExportingDocs ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
+              ) : (
+                <FileText className="w-3.5 h-3.5 shrink-0" />
+              )}
+              <span className="hidden xl:inline">Docs</span>
             </button>
 
             <button

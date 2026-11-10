@@ -214,6 +214,29 @@ export const api = {
     window.URL.revokeObjectURL(downloadUrl);
   },
 
+  async exportDataDictionary(diagramId: string, diagramName?: string): Promise<void> {
+    const url = `${BASE_URL}/diagrams/${diagramId}/export/docs`;
+    const token = localStorage.getItem('case2code_token');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Documentation export failed' }));
+      throw new Error(err.detail || 'Documentation export failed');
+    }
+    const blob = await res.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    const safeName = (diagramName || `diagrama-${diagramId}`).replace(/[^a-zA-Z0-9_\-]/g, '_');
+    a.download = `${safeName}_diccionario_datos.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(downloadUrl);
+  },
+
   async importXmi(diagramId: string, file: File): Promise<CanonicalUmlDocument> {
     const url = `${BASE_URL}/diagrams/${diagramId}/import/xmi`;
     const token = localStorage.getItem('case2code_token');
