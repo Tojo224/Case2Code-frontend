@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Check, ChevronDown, ListChecks, X } from 'lucide-react';
 import { useTourStore } from '../../store/useTourStore';
 import { MISSIONS, missionHasTour, nextPendingMission } from '../../tour/missions';
@@ -18,6 +18,13 @@ export const MissionChecklist: React.FC = () => {
   const doneCount = MISSIONS.filter((m) => m.id in completed).length;
   const percent = Math.round((doneCount / total) * 100);
   const next = nextPendingMission(completed);
+  const nextItemRef = useRef<HTMLLIElement | null>(null);
+
+  useEffect(() => {
+    if (!collapsed && nextItemRef.current && typeof nextItemRef.current.scrollIntoView === 'function') {
+      nextItemRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [collapsed, next?.id, doneCount]);
 
   if (collapsed) {
     return (
@@ -43,9 +50,10 @@ export const MissionChecklist: React.FC = () => {
     <section
       id="tour-checklist-panel"
       aria-labelledby="tour-checklist-title"
-      className="pointer-events-auto w-[min(19rem,calc(100vw-1.5rem))] max-h-[70vh] flex flex-col rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden"
+      onWheel={(e) => e.stopPropagation()}
+      className="pointer-events-auto w-[min(19rem,calc(100vw-1.5rem))] max-h-[min(60vh,24rem)] flex flex-col rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden"
     >
-      <header className="flex items-center gap-2 px-3 pt-3 pb-2">
+      <header className="flex items-center gap-2 px-3 pt-3 pb-2 shrink-0">
         <ListChecks className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" aria-hidden="true" />
         <h2 id="tour-checklist-title" className="flex-1 text-sm font-bold text-slate-800 dark:text-slate-100">
           Primeros pasos
@@ -78,7 +86,7 @@ export const MissionChecklist: React.FC = () => {
         aria-valuemin={0}
         aria-valuemax={total}
         aria-valuenow={doneCount}
-        className="mx-3 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden"
+        className="mx-3 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden shrink-0"
       >
         <div
           className="h-full bg-indigo-600 dark:bg-indigo-400 motion-safe:transition-all motion-safe:duration-500"
@@ -86,21 +94,22 @@ export const MissionChecklist: React.FC = () => {
         />
       </div>
 
-      <p className="px-3 pt-2 text-[11px] leading-snug text-slate-500 dark:text-slate-400">
+      <p className="px-3 pt-2 pb-1 text-[11px] leading-snug text-slate-500 dark:text-slate-400 shrink-0">
         {next
           ? 'Se tildan solos a medida que avanzás. Hacelos en el orden que quieras.'
           : '¡Completaste todo! Ya dominás lo básico de Case2Code.'}
       </p>
 
-      <ul className="overflow-y-auto px-2 py-2 space-y-0.5">
+      <ul className="c2c-scroll flex-1 min-h-0 overflow-y-auto overscroll-contain px-2 py-2 space-y-1">
         {MISSIONS.map((m) => {
           const done = m.id in completed;
           const isNext = next?.id === m.id;
           return (
             <li
               key={m.id}
-              className={`flex items-start gap-2 rounded-lg px-1.5 py-1.5 ${
-                isNext ? 'bg-indigo-50 dark:bg-indigo-950/40' : ''
+              ref={isNext ? nextItemRef : null}
+              className={`flex items-start gap-2 rounded-lg px-2 py-1.5 transition-colors ${
+                isNext ? 'bg-indigo-50 dark:bg-indigo-950/40 ring-1 ring-indigo-200/70 dark:ring-indigo-800/60' : ''
               }`}
             >
               <span

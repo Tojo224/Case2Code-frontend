@@ -19,7 +19,6 @@ import { collaborationWs } from '../../services/websocket';
 import { api } from '../../services/api';
 import {
   Bot,
-  Sparkles,
   Mic,
   MicOff,
   Send,
@@ -307,8 +306,8 @@ export const CaseAssistantChat: React.FC = () => {
     }
 
     setInputPrompt('');
-    // Typing in the assistant panel is addressing the AI, so no mention is required.
-    collaborationWs.sendChatMessage(prompt, aiMode, true);
+    // When solo in the room, the backend wakes the AI automatically; with 2+ users, @ai / @senior is required.
+    collaborationWs.sendChatMessage(prompt, aiMode, false);
   };
 
   const clearCardState = (key: string) =>
@@ -383,13 +382,6 @@ export const CaseAssistantChat: React.FC = () => {
       .filter(([id, state]) => id !== 'ai-senior' && id !== currentUser?.id && state.isTyping)
       .map(([, state]) => state.userName);
   }, [typingUsers, currentUser?.id]);
-
-  const quickPrompts = [
-    '@ai Crea una base de datos para un ecommerce',
-    '@ai ¿Qué opinas de la cardinalidad entre las entidades?',
-    '@ai Crea la clase Factura con id, fecha y total',
-    '@ai Revisa si el diseño cumple con 3FN',
-  ];
 
   if (!isAssistantOpen) return null;
 
@@ -615,7 +607,7 @@ export const CaseAssistantChat: React.FC = () => {
       </div>
 
       {/* Messages Feed */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-slate-50/60 dark:bg-slate-950/60">
+      <div className="c2c-scroll flex-1 overflow-y-auto p-4 space-y-3.5 bg-slate-50/60 dark:bg-slate-950/60">
         {chatMessages.length === 0 ? (
           <div className="text-center py-6 px-4">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-500/20 to-indigo-500/20 border border-purple-500/30 text-purple-600 dark:text-purple-400 flex items-center justify-center mx-auto mb-3">
@@ -931,48 +923,38 @@ export const CaseAssistantChat: React.FC = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Quick Prompts Suggestions */}
-      {chatMessages.length <= 3 && (
-        <div className="px-3 py-2 bg-slate-100/70 dark:bg-slate-800/70 border-t border-slate-200 dark:border-slate-800">
-          <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1.5 flex items-center space-x-1">
-            <Sparkles className="w-3 h-3 text-amber-500" />
-            <span>Preguntas sugeridas al Senior:</span>
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {quickPrompts.map((qp, idx) => (
-              <button
-                key={idx}
-                onClick={() => handleSendMessage(qp)}
-                className="text-[11px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 text-slate-600 dark:text-slate-300 px-2 py-1 rounded-lg transition text-left"
-              >
-                {qp}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Input Form */}
       <div className="p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 space-y-2">
         {/* Call instruction note */}
         <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200/60 dark:border-purple-800/50 rounded-lg px-2.5 py-1">
           <span>
-            Todo lo que escribas acá se lo decís al Senior AI; en el chat de la sala usá{' '}
-            <strong className="text-purple-700 dark:text-purple-300 font-mono">@ai</strong> o{' '}
-            <strong className="text-purple-700 dark:text-purple-300 font-mono">@senior</strong> para invocarlo
+            {activeUsers.length <= 1 ? (
+              <>
+                Estás solo en la sala: el <strong className="text-purple-700 dark:text-purple-300">Senior AI</strong> responde automáticamente sin necesitar{' '}
+                <strong className="text-purple-700 dark:text-purple-300 font-mono">@ai</strong>
+              </>
+            ) : (
+              <>
+                Hay {activeUsers.length} usuarios en sala: chateá con tu equipo o mencioná{' '}
+                <strong className="text-purple-700 dark:text-purple-300 font-mono">@ai</strong> /{' '}
+                <strong className="text-purple-700 dark:text-purple-300 font-mono">@senior</strong> para invocar a la IA
+              </>
+            )}
           </span>
-          <button
-            type="button"
-            onClick={() => {
-              if (!inputPrompt.toLowerCase().includes('@ai')) {
-                setInputPrompt((prev) => `@ai ${prev}`.trimStart());
-              }
-            }}
-            className="ml-2 shrink-0 bg-purple-600 hover:bg-purple-500 text-white font-mono font-semibold px-1.5 py-0.5 rounded text-[10px] transition cursor-pointer"
-            title="Insertar comando @ai en el mensaje"
-          >
-            + @ai
-          </button>
+          {activeUsers.length > 1 && (
+            <button
+              type="button"
+              onClick={() => {
+                if (!inputPrompt.toLowerCase().includes('@ai') && !inputPrompt.toLowerCase().includes('@senior')) {
+                  setInputPrompt((prev) => `@ai ${prev}`.trimStart());
+                }
+              }}
+              className="ml-2 shrink-0 bg-purple-600 hover:bg-purple-500 text-white font-mono font-semibold px-1.5 py-0.5 rounded text-[10px] transition cursor-pointer"
+              title="Insertar comando @ai en el mensaje"
+            >
+              + @ai
+            </button>
+          )}
         </div>
 
         {attachedImage && (

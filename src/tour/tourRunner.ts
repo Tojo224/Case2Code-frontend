@@ -120,6 +120,9 @@ export const runMicroTour = (missionId: string): (() => void) => {
     window.clearTimeout(advanceTimer);
     advanceTimer = window.setTimeout(() => {
       if (disposed || drv.getActiveIndex() !== index || !isDone(def)) return;
+      if (!useTourStore.getState().notice) {
+        useTourStore.getState().showNotice(`¡Paso completado! ${def.title}`, null);
+      }
       if (isLast(index)) finishNow();
       else goTo(index, index + 1, 'forward');
     }, AUTO_ADVANCE_DELAY_MS);

@@ -59,8 +59,9 @@ export const useAdaptiveTour = () => {
       if (newlyDone.length === 0) return;
       tour.completeMissions(newlyDone);
       if (announce.length > 0 && tour.mode === 'adaptive') {
+        const latestId = announce[announce.length - 1];
         const { message, nextMissionId } = buildMissionNotice(
-          announce[0],
+          latestId,
           useTourStore.getState().completed,
         );
         useTourStore.getState().showNotice(message, nextMissionId);
