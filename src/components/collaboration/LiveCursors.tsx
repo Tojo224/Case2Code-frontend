@@ -57,7 +57,11 @@ export const LiveCursors: React.FC = () => {
             key={cursor.userId}
             style={{
               transform: `translate3d(${cursor.x}px, ${cursor.y}px, 0)`,
-              transition: 'transform 80ms ease-out',
+              // The AI glides slowly between classes so people can follow it; humans stay snappy.
+              transition:
+                cursor.userId === 'ai-senior'
+                  ? 'transform 700ms cubic-bezier(0.4, 0, 0.2, 1)'
+                  : 'transform 80ms ease-out',
             }}
             className="absolute left-0 top-0 will-change-transform"
           >
