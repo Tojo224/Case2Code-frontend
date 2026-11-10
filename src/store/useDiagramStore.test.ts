@@ -394,6 +394,51 @@ describe('useDiagramStore', () => {
     });
   });
 
+  describe('version guard for REST responses', () => {
+    const named = (version: number, name: string): CanonicalUmlDocument => ({ ...sampleDoc, version, name });
+
+    it('a slow command response does not roll back a newer remote update', async () => {
+      useDiagramStore.setState({ currentDocument: sampleDoc });
+      let resolveCommand!: (v: { success: boolean; version: number; document: CanonicalUmlDocument }) => void;
+      vi.mocked(api.executeCommand).mockReturnValue(
+        new Promise((resolve) => {
+          resolveCommand = resolve;
+        }),
+      );
+
+      const pending = useDiagramStore.getState().dispatchCommand({ command_type: 'CREATE_CLASS', name: 'X' } as never);
+      useDiagramStore.getState().applyRemoteDocument(named(5, 'remoto-v5')); // WS update arrives first
+      resolveCommand({ success: true, version: 3, document: named(3, 'rest-v3') }); // stale REST answer
+      await pending;
+
+      expect(useDiagramStore.getState().currentDocument?.version).toBe(5);
+      expect(useDiagramStore.getState().currentDocument?.name).toBe('remoto-v5');
+    });
+
+    it('ignores an assistant or XMI response for a diagram that is no longer open', async () => {
+      useDiagramStore.setState({ currentDocument: { ...sampleDoc, id: 'otro', version: 1 } });
+      vi.mocked(api.importXmi).mockResolvedValue(named(9, 'viejo-diagrama'));
+      await useDiagramStore.getState().importXmi(new File(['<x/>'], 'a.xmi'));
+      expect(useDiagramStore.getState().currentDocument?.id).toBe('otro');
+      expect(useDiagramStore.getState().isImportingXmi).toBe(false);
+    });
+
+    it('a slower loadDiagram does not overwrite the diagram opened after it', async () => {
+      let resolveFirst!: (d: CanonicalUmlDocument) => void;
+      vi.mocked(api.getDiagram)
+        .mockReturnValueOnce(new Promise((resolve) => (resolveFirst = resolve)))
+        .mockResolvedValueOnce({ ...sampleDoc, id: 'segundo', name: 'Segundo' });
+
+      const first = useDiagramStore.getState().loadDiagram('primero');
+      await useDiagramStore.getState().loadDiagram('segundo');
+      resolveFirst({ ...sampleDoc, id: 'primero', name: 'Primero' });
+      await first;
+
+      expect(useDiagramStore.getState().currentDocument?.id).toBe('segundo');
+      expect(useDiagramStore.getState().isLoading).toBe(false);
+    });
+  });
+
   it('generates and downloads the generic Flutter mobile application zip', async () => {
     useDiagramStore.setState({ currentDocument: sampleDoc });
     vi.mocked(api.downloadMobileAppZip).mockResolvedValue();

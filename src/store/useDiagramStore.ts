@@ -297,6 +297,9 @@ function documentToElements(
   return { nodes, edges };
 }
 
+/** Id of the newest loadDiagram call: older, slower responses are discarded. */
+let latestLoadRequest = 0;
+
 export const useDiagramStore = create<DiagramState>((set, get) => ({
   currentDocument: null,
   diagramsList: [],
@@ -363,9 +366,12 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
   },
 
   loadDiagram: async (diagramId: string) => {
+    const requestId = ++latestLoadRequest;
     try {
       set({ isLoading: true, error: null });
       const doc = await api.getDiagram(diagramId);
+      // The user opened another diagram while this one was loading: drop the stale response.
+      if (requestId !== latestLoadRequest) return;
       const { nodes, edges } = documentToElements(doc);
       // A hologram belongs to the diagram it was proposed for.
       set({ currentDocument: doc, nodes, edges, isLoading: false, hologramCommands: null, hologramMessageId: null });
@@ -378,6 +384,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
         .then((collabs) => useCollaborationStore.getState().setCollaborators(collabs))
         .catch(() => {});
     } catch (e: any) {
+      if (requestId !== latestLoadRequest) return;
       set({ error: e.message, isLoading: false });
     }
   },
@@ -389,21 +396,8 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
     try {
       set({ error: null });
       const res = await api.executeCommand(doc.id, command);
-      const { nodes, edges } = documentToElements(res.document, get().hologramCommands);
-      
-      // Update selectedClass reference if it changed
-      const currentSelected = get().selectedClass;
-      let updatedSelected: UmlClass | null = null;
-      if (currentSelected) {
-        updatedSelected = res.document.classes.find((c) => c.id === currentSelected.id) || null;
-      }
-
-      set({
-        currentDocument: res.document,
-        nodes,
-        edges,
-        selectedClass: updatedSelected,
-      });
+      // Single version guard: a slow response must not roll back a newer remote update.
+      get().applyRemoteDocument(res.document);
     } catch (e: any) {
       set({ error: e.message });
       throw e;
@@ -421,21 +415,15 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
         const res = await api.executeCommand(latestDoc.id, cmd);
         latestDoc = res.document;
       }
-      const { nodes, edges } = documentToElements(latestDoc);
-      const currentSelected = get().selectedClass;
-      let updatedSelected: UmlClass | null = null;
-      if (currentSelected) {
-        updatedSelected = latestDoc.classes.find((c) => c.id === currentSelected.id) || null;
+      // Clear the hologram first so the guarded apply rebuilds the canvas without it; if the
+      // guard rejects a stale response, rebuild from what is already on screen.
+      set({ hologramCommands: null, hologramMessageId: null });
+      get().applyRemoteDocument(latestDoc);
+      const shown = get().currentDocument;
+      if (shown) {
+        const { nodes, edges } = documentToElements(shown);
+        set({ nodes, edges });
       }
-
-      set({
-        currentDocument: latestDoc,
-        nodes,
-        edges,
-        selectedClass: updatedSelected,
-        hologramCommands: null,
-        hologramMessageId: null,
-      });
     } catch (e: any) {
       set({ error: e.message });
       throw e;
@@ -770,13 +758,8 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
     try {
       set({ isImportingXmi: true, error: null });
       const updatedDoc = await api.importXmi(doc.id, file);
-      const { nodes, edges } = documentToElements(updatedDoc);
-      set({
-        currentDocument: updatedDoc,
-        nodes,
-        edges,
-        isImportingXmi: false,
-      });
+      get().applyRemoteDocument(updatedDoc);
+      set({ isImportingXmi: false });
     } catch (e: any) {
       set({ error: e.message, isImportingXmi: false });
     }
@@ -822,12 +805,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       set({ error: null });
       const res = await api.sendAssistantPrompt(doc.id, prompt, imageData);
       if (res.executed_commands && res.executed_commands.length > 0) {
-        const { nodes, edges } = documentToElements(res.document);
-        set({
-          currentDocument: res.document,
-          nodes,
-          edges,
-        });
+        get().applyRemoteDocument(res.document);
       }
       return res;
     } catch (e: any) {
