@@ -2,6 +2,13 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useDiagramStore } from '../../store/useDiagramStore';
 import { useCollaborationStore } from '../../store/useCollaborationStore';
 import { useAuthStore } from '../../store/useAuthStore';
+import { useVersionStore } from '../../store/useVersionStore';
+import {
+  describeOperation,
+  isProposalFresh,
+  latestPendingHologram,
+  operationKey,
+} from './aiProposals';
 import { collaborationWs } from '../../services/websocket';
 import { api } from '../../services/api';
 import {
@@ -23,8 +30,16 @@ import {
   Maximize2,
   Minimize2,
   Eye,
+  History,
 } from 'lucide-react';
 import { AiProviderStatus, ChatMessage } from '../../types/collaboration';
+import type { SuggestedOperation } from '../../types/versions';
+
+type OperationState =
+  | { status: 'working' }
+  | { status: 'done'; message: string }
+  | { status: 'error'; message: string }
+  | { status: 'dismissed' };
 
 export const CaseAssistantChat: React.FC = () => {
   const {
@@ -45,6 +60,8 @@ export const CaseAssistantChat: React.FC = () => {
     loadChatHistory,
   } = useCollaborationStore();
   const { currentUser } = useAuthStore();
+  const { restore, createCheckpoint, openPanel, isWorking: isVersionWorking } = useVersionStore();
+  const [operationStates, setOperationStates] = useState<Record<string, OperationState>>({});
 
   const [inputPrompt, setInputPrompt] = useState('');
   const [isUploadingImage, setIsUploadingImage] = useState(false);
@@ -106,7 +123,14 @@ export const CaseAssistantChat: React.FC = () => {
   // Load chat history and AI provider status when diagram changes or drawer opens
   useEffect(() => {
     if (currentDocument?.id && isAssistantOpen) {
-      loadChatHistory(currentDocument.id);
+      const diagramId = currentDocument.id;
+      loadChatHistory(diagramId).then(() => {
+        // Bring back the AI's last still-fresh proposal as a hologram after a reload.
+        const diagramState = useDiagramStore.getState();
+        if (diagramState.currentDocument?.id !== diagramId || diagramState.hologramCommands) return;
+        const pending = latestPendingHologram(useCollaborationStore.getState().chatMessages);
+        if (pending) diagramState.setHologramCommands(pending);
+      });
       fetchAiStatus();
     }
   }, [currentDocument?.id, isAssistantOpen, loadChatHistory]);
@@ -272,7 +296,30 @@ export const CaseAssistantChat: React.FC = () => {
     }
 
     setInputPrompt('');
-    collaborationWs.sendChatMessage(prompt, aiMode);
+    // Typing in the assistant panel is addressing the AI, so no mention is required.
+    collaborationWs.sendChatMessage(prompt, aiMode, true);
+  };
+
+  const runOperation = async (key: string, op: SuggestedOperation) => {
+    if (!currentDocument) return;
+    setOperationStates((s) => ({ ...s, [key]: { status: 'working' } }));
+    const fail = (fallback: string): OperationState => ({
+      status: 'error',
+      message: useVersionStore.getState().error || fallback,
+    });
+    let result: OperationState;
+    if (op.op === 'RESTORE_VERSION') {
+      const ok = await restore(currentDocument.id, op.version_number);
+      result = ok
+        ? { status: 'done', message: `Restauraste la versión ${op.version_number}. Se guardó el estado anterior por si querés volver.` }
+        : fail('No se pudo restaurar la versión.');
+    } else {
+      const created = await createCheckpoint(currentDocument.id, op.label);
+      result = created
+        ? { status: 'done', message: `Checkpoint v${created.number} creado.` }
+        : fail('No se pudo crear el checkpoint.');
+    }
+    setOperationStates((s) => ({ ...s, [key]: result }));
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -645,6 +692,76 @@ export const CaseAssistantChat: React.FC = () => {
                     </div>
                   )}
 
+                  {/* AI-proposed operations (restore / checkpoint): a human must approve */}
+                  {isAi && msg.suggested_operations && msg.suggested_operations.length > 0 && (
+                    <div className="mt-2.5 pt-2 border-t border-amber-200 dark:border-amber-900/60 space-y-2">
+                      {msg.suggested_operations.map((op, idx) => {
+                        const view = describeOperation(op);
+                        if (!view) return null;
+                        const key = operationKey(msg.id, idx);
+                        const state = operationStates[key];
+                        if (state?.status === 'dismissed') return null;
+                        const fresh = isProposalFresh(msg.created_at);
+                        const busy = state?.status === 'working' || isVersionWorking;
+                        return (
+                          <div
+                            key={key}
+                            className="rounded-lg border border-amber-200 dark:border-amber-800/70 bg-amber-50/70 dark:bg-amber-950/30 p-2 space-y-1.5"
+                          >
+                            <div className="flex items-center space-x-1.5 text-[11px] font-semibold text-amber-800 dark:text-amber-200">
+                              <History className="w-3 h-3 shrink-0" />
+                              <span>{view.title}</span>
+                            </div>
+                            {view.detail && (
+                              <p className="text-[10px] text-amber-900/80 dark:text-amber-200/80">{view.detail}</p>
+                            )}
+                            {state?.status === 'done' && (
+                              <p className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">{state.message}</p>
+                            )}
+                            {state?.status === 'error' && (
+                              <p className="text-[10px] font-semibold text-red-600 dark:text-red-400">{state.message}</p>
+                            )}
+                            {state?.status === 'done' ? null : !fresh ? (
+                              <p className="text-[10px] text-slate-500 dark:text-slate-400">Propuesta vencida: pedímela de nuevo.</p>
+                            ) : (
+                              <div className="flex flex-wrap gap-1.5">
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => runOperation(key, op)}
+                                  className="inline-flex items-center space-x-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
+                                >
+                                  {state?.status === 'working' ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <CheckCircle2 className="w-3 h-3" />
+                                  )}
+                                  <span>{state?.status === 'working' ? 'Aplicando...' : view.confirmLabel}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => setOperationStates((s) => ({ ...s, [key]: { status: 'dismissed' } }))}
+                                  className="inline-flex items-center space-x-1 px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-60 text-slate-600 dark:text-slate-300 rounded-lg text-[11px] transition cursor-pointer"
+                                >
+                                  <X className="w-3 h-3" />
+                                  <span>Descartar</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        onClick={() => openPanel()}
+                        className="text-[10px] font-medium text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer"
+                      >
+                        Ver historial
+                      </button>
+                    </div>
+                  )}
+
                   {/* Applied UML Commands badge and command chips */}
                   {isAi && cmdCount > 0 && (
                     <div className="mt-2 pt-2 border-t border-purple-100 dark:border-purple-900/50 space-y-1">
@@ -728,8 +845,9 @@ export const CaseAssistantChat: React.FC = () => {
         {/* Call instruction note */}
         <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200/60 dark:border-purple-800/50 rounded-lg px-2.5 py-1">
           <span>
-            Usá <strong className="text-purple-700 dark:text-purple-300 font-mono">@ai</strong> o{' '}
-            <strong className="text-purple-700 dark:text-purple-300 font-mono">@senior</strong> para invocar al asistente en la sala
+            Todo lo que escribas acá se lo decís al Senior AI; en el chat de la sala usá{' '}
+            <strong className="text-purple-700 dark:text-purple-300 font-mono">@ai</strong> o{' '}
+            <strong className="text-purple-700 dark:text-purple-300 font-mono">@senior</strong> para invocarlo
           </span>
           <button
             type="button"
@@ -816,7 +934,7 @@ export const CaseAssistantChat: React.FC = () => {
               placeholder={
                 attachedImage
                   ? 'Instrucción para el boceto (Enter para replicar)...'
-                  : 'Pregunta al Senior AI o escribe al equipo...'
+                  : 'Escribile al Senior AI...'
               }
               className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:text-slate-100 rounded-xl px-3 py-2.5 pr-9 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-750 transition"
             />

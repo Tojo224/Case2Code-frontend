@@ -93,11 +93,14 @@ class CollaborationClient {
     }
   }
 
-  sendChatMessage(content: string, aiMode: string = 'advisory') {
+  // forceAi: the sender is addressing the AI directly (assistant panel). Without it the backend
+  // only wakes the AI on an explicit mention (@ai, @senior, @bot, /ai).
+  sendChatMessage(content: string, aiMode: string = 'advisory', forceAi: boolean = false) {
     this.send({
       type: 'SEND_CHAT_MESSAGE',
       content,
       ai_mode: aiMode,
+      force_ai: forceAi,
     });
   }
 
