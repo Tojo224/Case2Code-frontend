@@ -19,6 +19,7 @@ RUN apk add --no-cache openssl curl \
 
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY deploy/nginx/app.conf /etc/nginx/case2code/app.conf
+COPY deploy/nginx/security-headers.conf /etc/nginx/case2code/security-headers.conf
 COPY deploy/nginx/http.conf /etc/nginx/case2code/http.conf
 COPY deploy/nginx/https.conf.template /etc/nginx/case2code/https.conf.template
 # The official image runs every /docker-entrypoint.d/*.sh before starting nginx.
