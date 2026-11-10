@@ -1,6 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCollaborationStore } from '../store/useCollaborationStore';
+import { useDiagramStore } from '../store/useDiagramStore';
+import { api } from './api';
 import { collaborationWs } from './websocket';
+import type { ChatMessage } from '../types/collaboration';
+import type { CanonicalUmlDocument } from '../types/uml';
+
+vi.mock('./api', () => ({
+  api: {
+    getDiagram: vi.fn(),
+    getChatHistory: vi.fn(),
+  },
+}));
 
 class FakeWebSocket {
   static CONNECTING = 0;
@@ -119,5 +130,104 @@ describe('CollaborationClient reconnection', () => {
 
     expect(useCollaborationStore.getState().isConnected).toBe(true);
     expect(FakeWebSocket.instances).toHaveLength(2);
+  });
+});
+
+describe('CollaborationClient resync and chat updates', () => {
+  const doc = (version: number): CanonicalUmlDocument => ({
+    id: 'd1',
+    name: 'D',
+    version,
+    classes: [],
+    relationships: [],
+    created_at: '',
+    updated_at: '',
+  });
+  const chatMsg = (partial: Partial<ChatMessage> = {}): ChatMessage => ({
+    id: 'm1',
+    diagram_id: 'd1',
+    sender_id: 'ai-senior',
+    sender_name: 'Senior AI',
+    sender_avatar_color: '#000',
+    sender_type: 'AI',
+    content: 'hola',
+    created_at: '2026-01-01T00:00:00Z',
+    ...partial,
+  });
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    FakeWebSocket.instances = [];
+    vi.clearAllMocks();
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    vi.stubGlobal('window', {
+      location: { protocol: 'http:', host: 'localhost' },
+      setTimeout: (fn: () => void, ms: number) => setTimeout(fn, ms),
+    });
+    vi.stubGlobal('localStorage', { getItem: () => 'tok', setItem: () => {}, removeItem: () => {} });
+    useCollaborationStore.getState().clearState();
+    useDiagramStore.setState({ currentDocument: doc(1), nodes: [], edges: [], hologramCommands: null, hologramMessageId: null });
+    vi.mocked(api.getDiagram).mockResolvedValue(doc(5));
+    vi.mocked(api.getChatHistory).mockResolvedValue({ diagram_id: 'd1', messages: [chatMsg({ id: 'h1' })] });
+  });
+
+  afterEach(() => {
+    collaborationWs.disconnect();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('does not resync on the first connect', async () => {
+    collaborationWs.connect('d1', 'tok');
+    FakeWebSocket.instances[0].open();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(api.getDiagram).not.toHaveBeenCalled();
+    expect(api.getChatHistory).not.toHaveBeenCalled();
+  });
+
+  it('refetches the document and chat after a reconnect', async () => {
+    collaborationWs.connect('d1', 'tok');
+    FakeWebSocket.instances[0].open();
+    FakeWebSocket.instances[0].drop(1006);
+    await vi.advanceTimersByTimeAsync(RECONNECT_DELAY_MS);
+    FakeWebSocket.instances[1].open();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(api.getDiagram).toHaveBeenCalledWith('d1');
+    expect(api.getChatHistory).toHaveBeenCalledWith('d1');
+    expect(useDiagramStore.getState().currentDocument?.version).toBe(5);
+    expect(useCollaborationStore.getState().chatMessages.map((m) => m.id)).toEqual(['h1']);
+  });
+
+  it('does not resync after an intentional disconnect and a fresh connect', async () => {
+    collaborationWs.connect('d1', 'tok');
+    FakeWebSocket.instances[0].open();
+    collaborationWs.disconnect();
+    collaborationWs.connect('d1', 'tok');
+    FakeWebSocket.instances[1].open();
+    await vi.advanceTimersByTimeAsync(RECONNECT_DELAY_MS * 3);
+    expect(api.getDiagram).not.toHaveBeenCalled();
+  });
+
+  it('replaces a chat message on CHAT_MESSAGE_UPDATED and clears its hologram', () => {
+    collaborationWs.connect('d1', 'tok');
+    const ws = FakeWebSocket.instances[0];
+    ws.open();
+    const holo = [{ command_type: 'CREATE_CLASS', name: 'X' }] as never[];
+    const proposal = chatMsg({ suggested_commands: holo });
+    ws.onmessage?.({ data: JSON.stringify({ type: 'CHAT_MESSAGE', diagram_id: 'd1', message: proposal }) });
+    expect(useDiagramStore.getState().hologramMessageId).toBe('m1');
+
+    const resolved = chatMsg({
+      suggested_commands: holo,
+      resolutions: { hologram: { status: 'APPLIED', by_id: 'u', by_name: 'Ana', at: 'x' } },
+    });
+    ws.onmessage?.({ data: JSON.stringify({ type: 'CHAT_MESSAGE_UPDATED', diagram_id: 'd1', message: resolved }) });
+
+    const msgs = useCollaborationStore.getState().chatMessages;
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].resolutions?.hologram.by_name).toBe('Ana');
+    expect(useDiagramStore.getState().hologramCommands).toBeNull();
+    expect(useDiagramStore.getState().hologramMessageId).toBeNull();
   });
 });
