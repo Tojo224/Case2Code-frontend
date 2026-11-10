@@ -2,6 +2,19 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useDiagramStore } from '../../store/useDiagramStore';
 import { useCollaborationStore } from '../../store/useCollaborationStore';
 import { useAuthStore } from '../../store/useAuthStore';
+import { useVersionStore } from '../../store/useVersionStore';
+import {
+  HOLOGRAM_RESOLUTION_KEY,
+  describeOperation,
+  describeResolution,
+  describeResolveError,
+  getResolution,
+  isProposalFresh,
+  isViewerRole,
+  latestPendingHologramProposal,
+  operationKey,
+  operationResolutionKey,
+} from './aiProposals';
 import { collaborationWs } from '../../services/websocket';
 import { api } from '../../services/api';
 import {
@@ -23,8 +36,13 @@ import {
   Maximize2,
   Minimize2,
   Eye,
+  History,
 } from 'lucide-react';
 import { AiProviderStatus, ChatMessage } from '../../types/collaboration';
+
+// Local, transient state of a card: only while a request runs or after a failed one.
+// Whether a proposal was applied or discarded lives on the server (message.resolutions).
+type CardState = { status: 'working'; action: 'APPLY' | 'DISCARD' } | { status: 'error'; message: string };
 
 export const CaseAssistantChat: React.FC = () => {
   const {
@@ -33,8 +51,11 @@ export const CaseAssistantChat: React.FC = () => {
     sendAssistantPrompt,
     currentDocument,
     setHologramCommands,
-    dispatchCommands,
+    applyHologram,
     clearHologram,
+    applyRemoteDocument,
+    isApplyingHologram,
+    hologramMessageId,
   } = useDiagramStore();
   const {
     chatMessages,
@@ -43,8 +64,15 @@ export const CaseAssistantChat: React.FC = () => {
     aiMode,
     setAiMode,
     loadChatHistory,
+    collaborators,
+    updateChatMessage,
+    chatNotice,
+    setChatNotice,
   } = useCollaborationStore();
   const { currentUser } = useAuthStore();
+  const { openPanel } = useVersionStore();
+  const [cardStates, setCardStates] = useState<Record<string, CardState>>({});
+  const isViewer = isViewerRole(collaborators, currentUser?.id);
 
   const [inputPrompt, setInputPrompt] = useState('');
   const [isUploadingImage, setIsUploadingImage] = useState(false);
@@ -106,7 +134,14 @@ export const CaseAssistantChat: React.FC = () => {
   // Load chat history and AI provider status when diagram changes or drawer opens
   useEffect(() => {
     if (currentDocument?.id && isAssistantOpen) {
-      loadChatHistory(currentDocument.id);
+      const diagramId = currentDocument.id;
+      loadChatHistory(diagramId).then(() => {
+        // Bring back the AI's last still-fresh proposal as a hologram after a reload.
+        const diagramState = useDiagramStore.getState();
+        if (diagramState.currentDocument?.id !== diagramId || diagramState.hologramCommands) return;
+        const pending = latestPendingHologramProposal(useCollaborationStore.getState().chatMessages);
+        if (pending) diagramState.setHologramCommands(pending.commands, pending.id);
+      });
       fetchAiStatus();
     }
   }, [currentDocument?.id, isAssistantOpen, loadChatHistory]);
@@ -272,7 +307,60 @@ export const CaseAssistantChat: React.FC = () => {
     }
 
     setInputPrompt('');
-    collaborationWs.sendChatMessage(prompt, aiMode);
+    // Typing in the assistant panel is addressing the AI, so no mention is required.
+    collaborationWs.sendChatMessage(prompt, aiMode, true);
+  };
+
+  const clearCardState = (key: string) =>
+    setCardStates((s) => {
+      const { [key]: _removed, ...rest } = s;
+      return rest;
+    });
+
+  // Approve/discard a card through the server so the outcome is shared and durable.
+  const resolveCard = async (
+    msg: ChatMessage,
+    target: 'hologram' | 'operation',
+    action: 'APPLY' | 'DISCARD',
+    key: string,
+    opts: { index?: number; isRestore?: boolean } = {},
+  ) => {
+    if (!currentDocument) return;
+    if (cardStates[key]?.status === 'working') return;
+    setCardStates((s) => ({ ...s, [key]: { status: 'working', action } }));
+    try {
+      const res = await api.resolveProposal(currentDocument.id, msg.id, {
+        target,
+        ...(target === 'operation' ? { index: opts.index } : {}),
+        action,
+        // A restore must not revert work done after the proposal was approved elsewhere.
+        ...(action === 'APPLY' && opts.isRestore ? { expected_document_version: currentDocument.version } : {}),
+      });
+      updateChatMessage(res.message);
+      if (res.document) applyRemoteDocument(res.document);
+      if (target === 'hologram' && useDiagramStore.getState().hologramMessageId === msg.id) clearHologram();
+      clearCardState(key);
+    } catch (err) {
+      const resolutionKey = target === 'hologram' ? HOLOGRAM_RESOLUTION_KEY : operationResolutionKey(opts.index ?? 0);
+      const view = describeResolveError(err, resolutionKey);
+      if (view.updatedMessage) updateChatMessage(view.updatedMessage);
+      if (target === 'hologram' && (view.kind === 'expired' || view.updatedMessage?.resolutions?.[HOLOGRAM_RESOLUTION_KEY])) {
+        if (useDiagramStore.getState().hologramMessageId === msg.id) clearHologram();
+      }
+      // An already-resolved card now renders its resolution; the text is only for real errors.
+      if (view.updatedMessage?.resolutions?.[resolutionKey]) clearCardState(key);
+      else setCardStates((s) => ({ ...s, [key]: { status: 'error', message: view.message } }));
+    }
+  };
+
+  const showHologram = (msg: ChatMessage) => {
+    if (msg.suggested_commands) setHologramCommands(msg.suggested_commands, msg.id);
+  };
+
+  const applyHologramCard = (msg: ChatMessage) => {
+    if (!msg.suggested_commands || isApplyingHologram) return;
+    showHologram(msg);
+    void applyHologram();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -281,6 +369,13 @@ export const CaseAssistantChat: React.FC = () => {
       handleSendMessage();
     }
   };
+
+  // A refusal notice (too long / rate limited) disappears by itself.
+  useEffect(() => {
+    if (!chatNotice) return;
+    const timer = window.setTimeout(() => setChatNotice(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [chatNotice, setChatNotice]);
 
   const isAiTyping = Boolean(typingUsers['ai-senior']?.isTyping);
   const typingUserNames = useMemo(() => {
@@ -607,41 +702,166 @@ export const CaseAssistantChat: React.FC = () => {
                   <p className="whitespace-pre-line select-text">{msg.content}</p>
 
                   {/* Hologram Suggested Commands Card */}
-                  {isAi && msg.suggested_commands && msg.suggested_commands.length > 0 && cmdCount === 0 && (
-                    <div className="mt-2.5 pt-2 border-t border-cyan-200 dark:border-cyan-900/60 space-y-2">
-                      <div className="flex items-center justify-between text-[10px] font-semibold text-cyan-700 dark:text-cyan-300">
-                        <span>👻 Propuesta en Holograma ({msg.suggested_commands.length} elementos)</span>
+                  {isAi && msg.suggested_commands && msg.suggested_commands.length > 0 && cmdCount === 0 && (() => {
+                    const holoKey = `${msg.id}:${HOLOGRAM_RESOLUTION_KEY}`;
+                    const holoResolution = getResolution(msg, HOLOGRAM_RESOLUTION_KEY);
+                    const holoState = cardStates[holoKey];
+                    const isThisHologramApplying = isApplyingHologram && hologramMessageId === msg.id;
+                    const holoBusy = holoState?.status === 'working' || isApplyingHologram;
+                    return (
+                      <div className="mt-2.5 pt-2 border-t border-cyan-200 dark:border-cyan-900/60 space-y-2">
+                        <div className="flex items-center justify-between text-[10px] font-semibold text-cyan-700 dark:text-cyan-300">
+                          <span>👻 Propuesta en Holograma ({msg.suggested_commands.length} elementos)</span>
+                        </div>
+                        {holoResolution ? (
+                          <p
+                            className={`text-[10px] font-semibold ${
+                              holoResolution.status === 'APPLIED'
+                                ? 'text-emerald-700 dark:text-emerald-300'
+                                : 'text-slate-500 dark:text-slate-400'
+                            }`}
+                          >
+                            {describeResolution(holoResolution)}
+                          </p>
+                        ) : (
+                          <>
+                            {holoState?.status === 'error' && (
+                              <p className="text-[10px] font-semibold text-red-600 dark:text-red-400">{holoState.message}</p>
+                            )}
+                            <div className="flex flex-wrap gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => showHologram(msg)}
+                                className="inline-flex items-center space-x-1 px-2.5 py-1 bg-cyan-50 dark:bg-cyan-950/60 hover:bg-cyan-100 dark:hover:bg-cyan-900 text-cyan-800 dark:text-cyan-200 border border-cyan-300 dark:border-cyan-700 rounded-lg text-[11px] font-medium transition cursor-pointer"
+                              >
+                                <Eye className="w-3 h-3" />
+                                <span>Ver Holograma</span>
+                              </button>
+                              {!isViewer && (
+                                <button
+                                  type="button"
+                                  disabled={holoBusy}
+                                  onClick={() => applyHologramCard(msg)}
+                                  className="inline-flex items-center space-x-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
+                                >
+                                  {isThisHologramApplying ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <CheckCircle2 className="w-3 h-3" />
+                                  )}
+                                  <span>{isThisHologramApplying ? 'Aplicando...' : 'Aplicar al Diagrama'}</span>
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => clearHologram()}
+                                className="inline-flex items-center space-x-1 px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-[11px] transition cursor-pointer"
+                              >
+                                <X className="w-3 h-3" />
+                                <span>Ocultar</span>
+                              </button>
+                              {!isViewer && (
+                                <button
+                                  type="button"
+                                  disabled={holoBusy}
+                                  onClick={() => resolveCard(msg, 'hologram', 'DISCARD', holoKey)}
+                                  className="inline-flex items-center space-x-1 px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-red-100 dark:hover:bg-red-950/50 disabled:opacity-60 disabled:cursor-not-allowed text-slate-600 dark:text-slate-300 rounded-lg text-[11px] transition cursor-pointer"
+                                >
+                                  <X className="w-3 h-3" />
+                                  <span>{holoState?.status === 'working' ? 'Descartando...' : 'Descartar'}</span>
+                                </button>
+                              )}
+                            </div>
+                          </>
+                        )}
                       </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setHologramCommands(msg.suggested_commands || null)}
-                          className="inline-flex items-center space-x-1 px-2.5 py-1 bg-cyan-50 dark:bg-cyan-950/60 hover:bg-cyan-100 dark:hover:bg-cyan-900 text-cyan-800 dark:text-cyan-200 border border-cyan-300 dark:border-cyan-700 rounded-lg text-[11px] font-medium transition cursor-pointer"
-                        >
-                          <Eye className="w-3 h-3" />
-                          <span>Ver Holograma</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (msg.suggested_commands) {
-                              dispatchCommands(msg.suggested_commands);
-                            }
-                          }}
-                          className="inline-flex items-center space-x-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
-                        >
-                          <CheckCircle2 className="w-3 h-3" />
-                          <span>Aplicar al Diagrama</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => clearHologram()}
-                          className="inline-flex items-center space-x-1 px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-[11px] transition cursor-pointer"
-                        >
-                          <X className="w-3 h-3" />
-                          <span>Ocultar</span>
-                        </button>
-                      </div>
+                    );
+                  })()}
+
+                  {/* AI-proposed operations (restore / checkpoint): a human must approve */}
+                  {isAi && msg.suggested_operations && msg.suggested_operations.length > 0 && (
+                    <div className="mt-2.5 pt-2 border-t border-amber-200 dark:border-amber-900/60 space-y-2">
+                      {msg.suggested_operations.map((op, idx) => {
+                        const view = describeOperation(op);
+                        if (!view) return null;
+                        const key = operationKey(msg.id, idx);
+                        const state = cardStates[key];
+                        const resolution = getResolution(msg, operationResolutionKey(idx));
+                        const fresh = isProposalFresh(msg.created_at);
+                        const busy = state?.status === 'working';
+                        const approving = state?.status === 'working' && state.action === 'APPLY';
+                        return (
+                          <div
+                            key={key}
+                            className="rounded-lg border border-amber-200 dark:border-amber-800/70 bg-amber-50/70 dark:bg-amber-950/30 p-2 space-y-1.5"
+                          >
+                            <div className="flex items-center space-x-1.5 text-[11px] font-semibold text-amber-800 dark:text-amber-200">
+                              <History className="w-3 h-3 shrink-0" />
+                              <span>{view.title}</span>
+                            </div>
+                            {view.detail && (
+                              <p className="text-[10px] text-amber-900/80 dark:text-amber-200/80">{view.detail}</p>
+                            )}
+                            {resolution && (
+                              <p
+                                className={`text-[10px] font-semibold ${
+                                  resolution.status === 'APPLIED'
+                                    ? 'text-emerald-700 dark:text-emerald-300'
+                                    : 'text-slate-500 dark:text-slate-400'
+                                }`}
+                              >
+                                {describeResolution(resolution)}
+                                {resolution.detail ? `. ${resolution.detail}` : ''}
+                              </p>
+                            )}
+                            {!resolution && state?.status === 'error' && (
+                              <p className="text-[10px] font-semibold text-red-600 dark:text-red-400">{state.message}</p>
+                            )}
+                            {resolution ? null : !fresh ? (
+                              <p className="text-[10px] text-slate-500 dark:text-slate-400">Propuesta vencida: pedímela de nuevo.</p>
+                            ) : isViewer ? (
+                              <p className="text-[10px] text-slate-500 dark:text-slate-400">Solo un editor puede aprobar esta propuesta.</p>
+                            ) : (
+                              <div className="flex flex-wrap gap-1.5">
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() =>
+                                    resolveCard(msg, 'operation', 'APPLY', key, {
+                                      index: idx,
+                                      isRestore: op.op === 'RESTORE_VERSION',
+                                    })
+                                  }
+                                  className="inline-flex items-center space-x-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
+                                >
+                                  {approving ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <CheckCircle2 className="w-3 h-3" />
+                                  )}
+                                  <span>{approving ? 'Aplicando...' : view.confirmLabel}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => resolveCard(msg, 'operation', 'DISCARD', key, { index: idx })}
+                                  className="inline-flex items-center space-x-1 px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-60 text-slate-600 dark:text-slate-300 rounded-lg text-[11px] transition cursor-pointer"
+                                >
+                                  <X className="w-3 h-3" />
+                                  <span>Descartar</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        onClick={() => openPanel()}
+                        className="text-[10px] font-medium text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer"
+                      >
+                        Ver historial
+                      </button>
                     </div>
                   )}
 
@@ -671,6 +891,15 @@ export const CaseAssistantChat: React.FC = () => {
               </div>
             );
           })
+        )}
+
+        {chatNotice && (
+          <div
+            role="status"
+            className="text-[11px] font-medium text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/60 rounded-xl p-2.5 max-w-[85%]"
+          >
+            {chatNotice}
+          </div>
         )}
 
         {/* Real-time Senior AI Typing Indicator */}
@@ -728,8 +957,9 @@ export const CaseAssistantChat: React.FC = () => {
         {/* Call instruction note */}
         <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200/60 dark:border-purple-800/50 rounded-lg px-2.5 py-1">
           <span>
-            Usá <strong className="text-purple-700 dark:text-purple-300 font-mono">@ai</strong> o{' '}
-            <strong className="text-purple-700 dark:text-purple-300 font-mono">@senior</strong> para invocar al asistente en la sala
+            Todo lo que escribas acá se lo decís al Senior AI; en el chat de la sala usá{' '}
+            <strong className="text-purple-700 dark:text-purple-300 font-mono">@ai</strong> o{' '}
+            <strong className="text-purple-700 dark:text-purple-300 font-mono">@senior</strong> para invocarlo
           </span>
           <button
             type="button"
@@ -813,10 +1043,11 @@ export const CaseAssistantChat: React.FC = () => {
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
               disabled={isUploadingImage}
+              maxLength={2000}
               placeholder={
                 attachedImage
                   ? 'Instrucción para el boceto (Enter para replicar)...'
-                  : 'Pregunta al Senior AI o escribe al equipo...'
+                  : 'Escribile al Senior AI...'
               }
               className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:text-slate-100 rounded-xl px-3 py-2.5 pr-9 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-750 transition"
             />

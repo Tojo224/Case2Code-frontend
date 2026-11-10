@@ -11,19 +11,16 @@ import { CaseAssistantChat } from './components/assistant/CaseAssistantChat';
 import { InviteModal } from './components/collaboration/InviteModal';
 import { AuthModal } from './components/auth/AuthModal';
 import { TourController } from './components/tour/TourController';
-import { useTourStore } from './store/useTourStore';
 import { offerTourWelcome } from './tour/offerWelcome';
 
 export const App: React.FC = () => {
   const { fetchDiagrams, currentDocument, createDiagram, isLoading, resetDiagrams } = useDiagramStore();
   const { loadSession } = useAuthStore();
   const { initTheme } = useThemeStore();
-  const initTour = useTourStore((s) => s.initTour);
 
   useEffect(() => {
     // 0. Initialize theme (dark / light mode)
     initTheme();
-    initTour();
 
     const init = async () => {
       // 1. Initialize user session (purges any legacy demo user)
@@ -44,7 +41,7 @@ export const App: React.FC = () => {
     };
 
     init();
-  }, [initTheme, initTour, loadSession, fetchDiagrams, resetDiagrams]);
+  }, [initTheme, loadSession, fetchDiagrams, resetDiagrams]);
 
   return (
     <div className="w-screen h-screen flex flex-col overflow-hidden bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
@@ -88,7 +85,7 @@ export const App: React.FC = () => {
       <InviteModal />
       <AuthModal />
 
-      {/* Guided onboarding tour */}
+      {/* Adaptive tutorial: missions checklist, hints and micro-tours */}
       <TourController />
     </div>
   );

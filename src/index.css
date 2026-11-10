@@ -227,3 +227,11 @@ dialog::backdrop {
 .driver-active .driver-active-element .pointer-events-none {
   pointer-events: none;
 }
+
+/* Tutorial popovers: no entrance motion for people who ask for reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  .driver-popover.c2c-tour {
+    transition: none;
+    animation: none;
+  }
+}

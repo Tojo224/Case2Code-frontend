@@ -26,6 +26,8 @@ interface CollaborationState {
   chatMessages: ChatMessage[];
   typingUsers: Record<string, { userName: string; isTyping: boolean }>;
   aiMode: AiColleagueMode;
+  /** Why the server refused the last chat message (size / rate limit); null when there is none. */
+  chatNotice: string | null;
 
   setConnected: (connected: boolean) => void;
   setRoomState: (users: UserPresence[]) => void;
@@ -39,12 +41,44 @@ interface CollaborationState {
 
   // Chat Actions
   setAiMode: (mode: AiColleagueMode) => void;
+  setChatNotice: (notice: string | null) => void;
   addChatMessage: (msg: ChatMessage) => void;
+  /** Replaces a message by id (e.g. a proposal that was resolved); appends it when unknown. */
+  updateChatMessage: (msg: ChatMessage) => void;
   setChatMessages: (msgs: ChatMessage[]) => void;
   setTypingUser: (userId: string, userName: string, isTyping: boolean) => void;
   loadChatHistory: (diagramId: string) => Promise<void>;
 
   clearState: () => void;
+}
+
+// Diagram of the most recent loadChatHistory call: responses for any other diagram are stale.
+let latestChatDiagramId: string | null = null;
+
+function resolutionCount(m: ChatMessage): number {
+  return Object.keys(m.resolutions ?? {}).length;
+}
+
+/**
+ * Merges a fetched history into the current list by id. Messages that arrived over the socket
+ * while the request was in flight are kept; messages of other diagrams are dropped; when both
+ * copies exist the one that knows more resolutions wins (a socket update may be newer).
+ */
+export function mergeChatHistory(
+  current: ChatMessage[],
+  fetched: ChatMessage[],
+  diagramId: string,
+): ChatMessage[] {
+  const currentById = new Map(current.map((m) => [m.id, m]));
+  const fetchedIds = new Set(fetched.map((m) => m.id));
+  const merged = fetched.map((m) => {
+    const existing = currentById.get(m.id);
+    return existing && resolutionCount(existing) > resolutionCount(m) ? existing : m;
+  });
+  const extras = current
+    .filter((m) => !fetchedIds.has(m.id) && m.diagram_id === diagramId)
+    .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0));
+  return [...merged, ...extras];
 }
 
 export const useCollaborationStore = create<CollaborationState>((set) => ({
@@ -59,6 +93,7 @@ export const useCollaborationStore = create<CollaborationState>((set) => ({
   chatMessages: [],
   typingUsers: {},
   aiMode: 'advisory',
+  chatNotice: null,
 
   setConnected: (connected) => set({ isConnected: connected }),
 
@@ -136,6 +171,8 @@ export const useCollaborationStore = create<CollaborationState>((set) => ({
 
   setChatMessages: (msgs) => set({ chatMessages: msgs }),
 
+  setChatNotice: (notice) => set({ chatNotice: notice }),
+
   setTypingUser: (userId, userName, isTyping) =>
     set((state) => {
       const updated = { ...state.typingUsers };
@@ -147,18 +184,32 @@ export const useCollaborationStore = create<CollaborationState>((set) => ({
       return { typingUsers: updated };
     }),
 
+  updateChatMessage: (msg) =>
+    set((state) => {
+      const exists = state.chatMessages.some((m) => m.id === msg.id);
+      return {
+        chatMessages: exists
+          ? state.chatMessages.map((m) => (m.id === msg.id ? msg : m))
+          : [...state.chatMessages, msg],
+      };
+    }),
+
   loadChatHistory: async (diagramId: string) => {
+    latestChatDiagramId = diagramId;
     try {
       const res = await api.getChatHistory(diagramId);
+      // A newer load (another diagram) or a clearState happened while this was in flight.
+      if (latestChatDiagramId !== diagramId) return;
       if (res && Array.isArray(res.messages)) {
-        set({ chatMessages: res.messages });
+        set((state) => ({ chatMessages: mergeChatHistory(state.chatMessages, res.messages, diagramId) }));
       }
     } catch (e) {
       console.warn('Could not load chat history:', e);
     }
   },
 
-  clearState: () =>
+  clearState: () => {
+    latestChatDiagramId = null;
     set({
       isConnected: false,
       activeUsers: [],
@@ -167,6 +218,8 @@ export const useCollaborationStore = create<CollaborationState>((set) => ({
       collaborators: [],
       chatMessages: [],
       typingUsers: {},
-    }),
+      chatNotice: null,
+    });
+  },
 }));
 

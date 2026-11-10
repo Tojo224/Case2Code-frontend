@@ -12,6 +12,7 @@ import { CanonicalUmlDocument, UmlClass, UmlCommand, RelationshipType, UmlRelati
 import { api } from '../services/api';
 import { collaborationWs } from '../services/websocket';
 import { useCollaborationStore } from './useCollaborationStore';
+import { HOLOGRAM_RESOLUTION_KEY, describeResolveError } from '../components/assistant/aiProposals';
 
 interface DiagramState {
   currentDocument: CanonicalUmlDocument | null;
@@ -34,6 +35,8 @@ interface DiagramState {
   isSqlModalOpen: boolean;
   hologramCommands: UmlCommand[] | null;
   isApplyingHologram: boolean;
+  // Chat message that proposed the active hologram (applied/discarded through the resolve endpoint)
+  hologramMessageId: string | null;
 
   // Actions
   fetchDiagrams: () => Promise<void>;
@@ -41,7 +44,7 @@ interface DiagramState {
   loadDiagram: (diagramId: string) => Promise<void>;
   dispatchCommand: (command: UmlCommand) => Promise<void>;
   dispatchCommands: (commands: UmlCommand[]) => Promise<void>;
-  setHologramCommands: (commands: UmlCommand[] | null) => void;
+  setHologramCommands: (commands: UmlCommand[] | null, messageId?: string | null) => void;
   applyHologram: () => Promise<void>;
   clearHologram: () => void;
   setActiveRelationType: (type: RelationshipType | null) => void;
@@ -294,6 +297,9 @@ function documentToElements(
   return { nodes, edges };
 }
 
+/** Id of the newest loadDiagram call: older, slower responses are discarded. */
+let latestLoadRequest = 0;
+
 export const useDiagramStore = create<DiagramState>((set, get) => ({
   currentDocument: null,
   diagramsList: [],
@@ -313,6 +319,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
   isSqlModalOpen: false,
   hologramCommands: null,
   isApplyingHologram: false,
+  hologramMessageId: null,
 
   fetchDiagrams: async () => {
     try {
@@ -359,11 +366,15 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
   },
 
   loadDiagram: async (diagramId: string) => {
+    const requestId = ++latestLoadRequest;
     try {
       set({ isLoading: true, error: null });
       const doc = await api.getDiagram(diagramId);
+      // The user opened another diagram while this one was loading: drop the stale response.
+      if (requestId !== latestLoadRequest) return;
       const { nodes, edges } = documentToElements(doc);
-      set({ currentDocument: doc, nodes, edges, isLoading: false });
+      // A hologram belongs to the diagram it was proposed for.
+      set({ currentDocument: doc, nodes, edges, isLoading: false, hologramCommands: null, hologramMessageId: null });
 
       // Connect real-time collaboration
       const token = localStorage.getItem('case2code_token');
@@ -373,6 +384,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
         .then((collabs) => useCollaborationStore.getState().setCollaborators(collabs))
         .catch(() => {});
     } catch (e: any) {
+      if (requestId !== latestLoadRequest) return;
       set({ error: e.message, isLoading: false });
     }
   },
@@ -384,21 +396,8 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
     try {
       set({ error: null });
       const res = await api.executeCommand(doc.id, command);
-      const { nodes, edges } = documentToElements(res.document);
-      
-      // Update selectedClass reference if it changed
-      const currentSelected = get().selectedClass;
-      let updatedSelected: UmlClass | null = null;
-      if (currentSelected) {
-        updatedSelected = res.document.classes.find((c) => c.id === currentSelected.id) || null;
-      }
-
-      set({
-        currentDocument: res.document,
-        nodes,
-        edges,
-        selectedClass: updatedSelected,
-      });
+      // Single version guard: a slow response must not roll back a newer remote update.
+      get().applyRemoteDocument(res.document);
     } catch (e: any) {
       set({ error: e.message });
       throw e;
@@ -416,45 +415,87 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
         const res = await api.executeCommand(latestDoc.id, cmd);
         latestDoc = res.document;
       }
-      const { nodes, edges } = documentToElements(latestDoc);
-      const currentSelected = get().selectedClass;
-      let updatedSelected: UmlClass | null = null;
-      if (currentSelected) {
-        updatedSelected = latestDoc.classes.find((c) => c.id === currentSelected.id) || null;
+      // Clear the hologram first so the guarded apply rebuilds the canvas without it; if the
+      // guard rejects a stale response, rebuild from what is already on screen.
+      set({ hologramCommands: null, hologramMessageId: null });
+      get().applyRemoteDocument(latestDoc);
+      const shown = get().currentDocument;
+      if (shown) {
+        const { nodes, edges } = documentToElements(shown);
+        set({ nodes, edges });
       }
-
-      set({
-        currentDocument: latestDoc,
-        nodes,
-        edges,
-        selectedClass: updatedSelected,
-        hologramCommands: null,
-      });
     } catch (e: any) {
       set({ error: e.message });
       throw e;
     }
   },
 
-  setHologramCommands: (commands) => {
+  setHologramCommands: (commands, messageId) => {
     const doc = get().currentDocument;
     if (!doc) return;
-    const { nodes, edges } = documentToElements(doc, commands);
+    const active = commands && commands.length > 0 ? commands : null;
+    const { nodes, edges } = documentToElements(doc, active);
     set({
-      hologramCommands: commands && commands.length > 0 ? commands : null,
+      hologramCommands: active,
+      hologramMessageId: active ? messageId ?? null : null,
       nodes,
       edges,
     });
   },
 
   applyHologram: async () => {
-    const cmds = get().hologramCommands;
-    if (!cmds || cmds.length === 0) return;
-    set({ isApplyingHologram: true });
+    const { hologramCommands: cmds, hologramMessageId: messageId, currentDocument: doc, isApplyingHologram } = get();
+    if (isApplyingHologram) return; // double click / concurrent apply
+    if (!cmds || cmds.length === 0 || !doc) return;
+
+    set({ isApplyingHologram: true, error: null });
     try {
-      await get().dispatchCommands(cmds);
-      set({ hologramCommands: null, isApplyingHologram: false });
-    } catch {
+      let nextDoc: CanonicalUmlDocument | null;
+      let appliedCount: number;
+      let skippedCount: number;
+
+      if (messageId) {
+        // Server-side resolve: records who applied it so every client and later reloads agree.
+        const res = await api.resolveProposal(doc.id, messageId, { target: 'hologram', action: 'APPLY' });
+        useCollaborationStore.getState().updateChatMessage(res.message);
+        nextDoc = res.document;
+        appliedCount = res.applied_count ?? 0;
+        skippedCount = res.skipped?.length ?? 0;
+      } else {
+        const res = await api.executeCommandsBatch(doc.id, cmds);
+        nextDoc = res.document;
+        appliedCount = res.applied.length;
+        skippedCount = res.skipped.length;
+      }
+
+      // Always sync, even when some commands were skipped.
+      if (nextDoc) get().applyRemoteDocument(nextDoc);
+      if (appliedCount > 0) get().clearHologram();
+
+      if (skippedCount > 0) {
+        set({
+          error:
+            appliedCount > 0
+              ? `Se aplicaron ${appliedCount} cambios y se omitieron ${skippedCount} porque ya no eran válidos.`
+              : `No se pudo aplicar el holograma: se omitieron ${skippedCount} cambios porque ya no eran válidos.`,
+        });
+      }
+    } catch (e: any) {
+      const view = describeResolveError(e, HOLOGRAM_RESOLUTION_KEY);
+      if (view.updatedMessage) useCollaborationStore.getState().updateChatMessage(view.updatedMessage);
+      // Someone else already resolved it, or it expired: the hologram is no longer actionable.
+      if (view.kind === 'expired' || (view.kind === 'conflict' && view.updatedMessage?.resolutions?.[HOLOGRAM_RESOLUTION_KEY])) {
+        get().clearHologram();
+      }
+      set({ error: view.message });
+      // The server may have applied part of it before failing: resync instead of guessing.
+      try {
+        const fresh = await api.getDiagram(doc.id);
+        get().applyRemoteDocument(fresh);
+      } catch {
+        // best effort
+      }
+    } finally {
       set({ isApplyingHologram: false });
     }
   },
@@ -462,11 +503,11 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
   clearHologram: () => {
     const doc = get().currentDocument;
     if (!doc) {
-      set({ hologramCommands: null });
+      set({ hologramCommands: null, hologramMessageId: null });
       return;
     }
     const { nodes, edges } = documentToElements(doc, null);
-    set({ hologramCommands: null, nodes, edges });
+    set({ hologramCommands: null, hologramMessageId: null, nodes, edges });
   },
 
   onNodesChange: (changes) => {
@@ -717,13 +758,8 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
     try {
       set({ isImportingXmi: true, error: null });
       const updatedDoc = await api.importXmi(doc.id, file);
-      const { nodes, edges } = documentToElements(updatedDoc);
-      set({
-        currentDocument: updatedDoc,
-        nodes,
-        edges,
-        isImportingXmi: false,
-      });
+      get().applyRemoteDocument(updatedDoc);
+      set({ isImportingXmi: false });
     } catch (e: any) {
       set({ error: e.message, isImportingXmi: false });
     }
@@ -769,12 +805,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       set({ error: null });
       const res = await api.sendAssistantPrompt(doc.id, prompt, imageData);
       if (res.executed_commands && res.executed_commands.length > 0) {
-        const { nodes, edges } = documentToElements(res.document);
-        set({
-          currentDocument: res.document,
-          nodes,
-          edges,
-        });
+        get().applyRemoteDocument(res.document);
       }
       return res;
     } catch (e: any) {
@@ -788,7 +819,8 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
     if (!currentDoc || currentDoc.id !== doc.id) return;
     if (doc.version < currentDoc.version) return;
 
-    const { nodes, edges } = documentToElements(doc);
+    // Keep a pending hologram visible across remote/echo updates.
+    const { nodes, edges } = documentToElements(doc, get().hologramCommands);
     const currentSelected = get().selectedClass;
     let updatedSelected: UmlClass | null = null;
     if (currentSelected) {
@@ -815,6 +847,8 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       pendingConnection: null,
       editingRelationship: null,
       activeRelationType: null,
+      hologramCommands: null,
+      hologramMessageId: null,
     });
   },
 }));

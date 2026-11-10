@@ -13,12 +13,14 @@ import {
   FileDown,
   FileUp,
   HelpCircle,
+  History,
 } from 'lucide-react';
 import { CollaboratorAvatars } from '../collaboration/CollaboratorAvatars';
 import { UserMenu } from '../auth/UserMenu';
 import { ThemeToggle } from './ThemeToggle';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useTourStore } from '../../store/useTourStore';
+import { useVersionStore } from '../../store/useVersionStore';
 
 export const Navbar: React.FC = () => {
   const {
@@ -45,6 +47,7 @@ export const Navbar: React.FC = () => {
 
   const currentUser = useAuthStore((s) => s.currentUser);
   const restartTour = useTourStore((s) => s.restart);
+  const openVersionPanel = useVersionStore((s) => s.openPanel);
 
   const [isCreatingDiag, setIsCreatingDiag] = useState(false);
   const [newDiagName, setNewDiagName] = useState('');
@@ -157,6 +160,18 @@ export const Navbar: React.FC = () => {
           >
             <Database className="w-3.5 h-3.5 shrink-0" />
             <span className="hidden sm:inline">SQL</span>
+          </button>
+
+          <button
+            data-tour="navbar-history"
+            onClick={openVersionPanel}
+            disabled={!currentDocument}
+            aria-label="Historial de versiones"
+            title="Historial de versiones"
+            className="flex items-center space-x-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-md shadow-sm transition cursor-pointer"
+          >
+            <History className="w-3.5 h-3.5 shrink-0" />
+            <span className="hidden xl:inline">Historial</span>
           </button>
 
           <button
