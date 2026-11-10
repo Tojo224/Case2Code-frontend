@@ -349,6 +349,36 @@ export const api = {
     if (!res.ok) throw new Error('Failed to remove collaborator');
   },
 
+  async createInviteLink(
+    diagramId: string,
+    role: string = 'EDITOR',
+  ): Promise<{ token: string; diagram_id: string; role: string; invite_url: string }> {
+    const res = await fetch(`${BASE_URL}/diagrams/${diagramId}/invite-link`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ role }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Failed to create invite link' }));
+      throw new Error(err.detail || 'Failed to create invite link');
+    }
+    return res.json();
+  },
+
+  async acceptInvite(token: string): Promise<CanonicalUmlDocument> {
+    const res = await fetch(`${BASE_URL}/diagrams/accept-invite`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ token }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Failed to accept invite' }));
+      throw new Error(err.detail || 'Failed to accept invite');
+    }
+    return res.json();
+  },
+
+
   async getChatHistory(diagramId: string): Promise<ChatHistoryResponse> {
     const res = await fetch(`${BASE_URL}/diagrams/${diagramId}/chat`, {
       headers: getAuthHeaders(),

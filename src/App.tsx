@@ -14,6 +14,7 @@ import { TourController } from './components/tour/TourController';
 import { UndoShortcuts } from './components/toolbar/UndoShortcuts';
 import { UndoToast } from './components/toolbar/UndoToast';
 import { offerTourWelcome } from './tour/offerWelcome';
+import { api } from './services/api';
 
 export const App: React.FC = () => {
   const { fetchDiagrams, currentDocument, createDiagram, isLoading, resetDiagrams } = useDiagramStore();
@@ -25,13 +26,47 @@ export const App: React.FC = () => {
     initTheme();
 
     const init = async () => {
+      // 0. Capture pending invite or diagram from query params
+      if (typeof window !== 'undefined' && window.location) {
+        const params = new URLSearchParams(window.location.search);
+        const inviteParam = params.get('invite');
+        const diagramParam = params.get('diagram');
+        if (inviteParam) {
+          sessionStorage.setItem('case2code_pending_invite', inviteParam);
+        }
+        if (diagramParam) {
+          sessionStorage.setItem('case2code_pending_diagram', diagramParam);
+        }
+      }
+
       // 1. Initialize user session (purges any legacy demo user)
       await loadSession();
 
       const user = useAuthStore.getState().currentUser;
       if (user) {
+        const pendingInvite = sessionStorage.getItem('case2code_pending_invite');
+        let targetId = sessionStorage.getItem('case2code_pending_diagram') || undefined;
+
+        if (pendingInvite) {
+          try {
+            const joinedDoc = await api.acceptInvite(pendingInvite);
+            targetId = joinedDoc.id;
+            sessionStorage.removeItem('case2code_pending_invite');
+            const url = new URL(window.location.href);
+            url.searchParams.delete('invite');
+            url.searchParams.set('diagram', joinedDoc.id);
+            window.history.replaceState({}, '', url.toString());
+          } catch (err) {
+            console.error('Failed to accept pending invite:', err);
+            sessionStorage.removeItem('case2code_pending_invite');
+          }
+        }
+
         // 2. Fetch accessible diagrams for active user
-        await fetchDiagrams();
+        await fetchDiagrams(targetId);
+        if (targetId) {
+          sessionStorage.removeItem('case2code_pending_diagram');
+        }
 
         // 3. First-time users get offered the guided tour (project loaded or empty state shown)
         offerTourWelcome();

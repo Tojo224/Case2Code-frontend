@@ -4,6 +4,7 @@ import { useAuthStore } from '../../store/useAuthStore';
 import { useCollaborationStore } from '../../store/useCollaborationStore';
 import { useDiagramStore } from '../../store/useDiagramStore';
 import { offerTourWelcome } from '../../tour/offerWelcome';
+import { api } from '../../services/api';
 
 export const AuthModal: React.FC = () => {
   const { isAuthModalOpen, setAuthModalOpen } = useCollaborationStore();
@@ -38,6 +39,33 @@ export const AuthModal: React.FC = () => {
     resetMessages();
   };
 
+  const handlePostAuthDiagramLoad = async () => {
+    const pendingInvite = sessionStorage.getItem('case2code_pending_invite');
+    let targetDiagramId = sessionStorage.getItem('case2code_pending_diagram') || undefined;
+
+    if (pendingInvite) {
+      try {
+        const joinedDoc = await api.acceptInvite(pendingInvite);
+        targetDiagramId = joinedDoc.id;
+        sessionStorage.removeItem('case2code_pending_invite');
+        if (typeof window !== 'undefined' && window.location) {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('invite');
+          url.searchParams.set('diagram', joinedDoc.id);
+          window.history.replaceState({}, '', url.toString());
+        }
+      } catch (err) {
+        console.error('Failed to accept invite after auth:', err);
+        sessionStorage.removeItem('case2code_pending_invite');
+      }
+    }
+
+    await fetchDiagrams(targetDiagramId);
+    if (targetDiagramId) {
+      sessionStorage.removeItem('case2code_pending_diagram');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     resetMessages();
@@ -46,7 +74,7 @@ export const AuthModal: React.FC = () => {
       const ok = await login(email, password);
       if (ok) {
         setAuthModalOpen(false);
-        await fetchDiagrams();
+        await handlePostAuthDiagramLoad();
         offerTourWelcome();
       }
     } else if (mode === 'REGISTER') {
@@ -61,7 +89,7 @@ export const AuthModal: React.FC = () => {
       const ok = await register(name, email, password, avatarColor);
       if (ok) {
         setAuthModalOpen(false);
-        await fetchDiagrams();
+        await handlePostAuthDiagramLoad();
         offerTourWelcome();
       }
     } else if (mode === 'FORGOT') {

@@ -41,7 +41,7 @@ interface DiagramState {
   hologramMessageId: string | null;
 
   // Actions
-  fetchDiagrams: () => Promise<void>;
+  fetchDiagrams: (targetDiagramId?: string) => Promise<void>;
   createDiagram: (name: string, description?: string) => Promise<void>;
   loadDiagram: (diagramId: string) => Promise<void>;
   dispatchCommand: (command: UmlCommand) => Promise<void>;
@@ -325,15 +325,28 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
   isApplyingHologram: false,
   hologramMessageId: null,
 
-  fetchDiagrams: async () => {
+  fetchDiagrams: async (targetDiagramId?: string) => {
     try {
       set({ isLoading: true, error: null });
       const list = await api.listDiagrams();
       set({ diagramsList: list, isLoading: false });
       if (list.length > 0) {
         const currentDoc = get().currentDocument;
-        if (!currentDoc || !list.some((d) => d.id === currentDoc.id)) {
-          await get().loadDiagram(list[0].id);
+        let preferredId = targetDiagramId;
+        if (!preferredId && typeof window !== 'undefined' && window.location) {
+          const params = new URLSearchParams(window.location.search);
+          preferredId = params.get('diagram') || undefined;
+        }
+
+        let diagramToLoadId = list[0].id;
+        if (preferredId && list.some((d) => d.id === preferredId)) {
+          diagramToLoadId = preferredId;
+        } else if (currentDoc && list.some((d) => d.id === currentDoc.id)) {
+          diagramToLoadId = currentDoc.id;
+        }
+
+        if (!currentDoc || currentDoc.id !== diagramToLoadId) {
+          await get().loadDiagram(diagramToLoadId);
         }
       } else {
         // User has no diagrams: clear canvas completely
@@ -356,6 +369,15 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
         edges,
         isLoading: false,
       }));
+
+      // Reflect in browser URL
+      try {
+        if (typeof window !== 'undefined' && window.location) {
+          const url = new URL(window.location.href);
+          url.searchParams.set('diagram', newDoc.id);
+          window.history.replaceState({}, '', url.toString());
+        }
+      } catch (_) {}
 
       // Connect real-time collaboration
       const token = localStorage.getItem('case2code_token');
@@ -380,6 +402,17 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       // A hologram belongs to the diagram it was proposed for.
       useUndoStore.getState().clear();
       set({ currentDocument: doc, nodes, edges, isLoading: false, hologramCommands: null, hologramMessageId: null });
+
+      // Keep browser URL synchronized without page reload
+      try {
+        if (typeof window !== 'undefined' && window.location) {
+          const url = new URL(window.location.href);
+          if (url.searchParams.get('diagram') !== doc.id) {
+            url.searchParams.set('diagram', doc.id);
+            window.history.replaceState({}, '', url.toString());
+          }
+        }
+      } catch (_) {}
 
       // Connect real-time collaboration
       const token = localStorage.getItem('case2code_token');
@@ -893,6 +926,14 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
     collaborationWs.disconnect();
     useCollaborationStore.getState().clearState();
     useUndoStore.getState().clear();
+    try {
+      if (typeof window !== 'undefined' && window.location) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('diagram');
+        url.searchParams.delete('invite');
+        window.history.replaceState({}, '', url.toString());
+      }
+    } catch (_) {}
     set({
       currentDocument: null,
       diagramsList: [],

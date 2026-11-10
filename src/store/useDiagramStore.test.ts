@@ -478,5 +478,31 @@ describe('useDiagramStore', () => {
     expect(api.downloadMobileAppZip).toHaveBeenCalledWith('diag-1', 'Peluqueria');
     expect(useDiagramStore.getState().isGeneratingMobile).toBe(false);
   });
+
+  describe('fetchDiagrams & URL deep-linking', () => {
+    const docA = { ...sampleDoc, id: 'diag-A', name: 'Diagram A' };
+    const docB = { ...sampleDoc, id: 'diag-B', name: 'Diagram B' };
+
+    it('loads targetDiagramId when specified', async () => {
+      vi.mocked(api.listDiagrams).mockResolvedValue([docA, docB]);
+      vi.mocked(api.getDiagram).mockResolvedValue(docB);
+
+      await useDiagramStore.getState().fetchDiagrams('diag-B');
+
+      expect(api.getDiagram).toHaveBeenCalledWith('diag-B');
+      expect(useDiagramStore.getState().currentDocument?.id).toBe('diag-B');
+    });
+
+    it('falls back to first diagram in list when targetDiagramId is absent and URL has no query', async () => {
+      vi.mocked(api.listDiagrams).mockResolvedValue([docA, docB]);
+      vi.mocked(api.getDiagram).mockResolvedValue(docA);
+
+      await useDiagramStore.getState().fetchDiagrams();
+
+      expect(api.getDiagram).toHaveBeenCalledWith('diag-A');
+      expect(useDiagramStore.getState().currentDocument?.id).toBe('diag-A');
+    });
+  });
 });
+
 
