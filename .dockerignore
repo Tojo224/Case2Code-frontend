@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.git/
+.claude/
+.codegraph/
+.env
+.env.*
+odd/
+*.md
+*.log
+tsconfig.tsbuildinfo
