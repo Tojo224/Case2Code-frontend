@@ -66,6 +66,8 @@ export const CaseAssistantChat: React.FC = () => {
     loadChatHistory,
     collaborators,
     updateChatMessage,
+    chatNotice,
+    setChatNotice,
   } = useCollaborationStore();
   const { currentUser } = useAuthStore();
   const { openPanel } = useVersionStore();
@@ -367,6 +369,13 @@ export const CaseAssistantChat: React.FC = () => {
       handleSendMessage();
     }
   };
+
+  // A refusal notice (too long / rate limited) disappears by itself.
+  useEffect(() => {
+    if (!chatNotice) return;
+    const timer = window.setTimeout(() => setChatNotice(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [chatNotice, setChatNotice]);
 
   const isAiTyping = Boolean(typingUsers['ai-senior']?.isTyping);
   const typingUserNames = useMemo(() => {
@@ -884,6 +893,15 @@ export const CaseAssistantChat: React.FC = () => {
           })
         )}
 
+        {chatNotice && (
+          <div
+            role="status"
+            className="text-[11px] font-medium text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/60 rounded-xl p-2.5 max-w-[85%]"
+          >
+            {chatNotice}
+          </div>
+        )}
+
         {/* Real-time Senior AI Typing Indicator */}
         {isAiTyping && (
           <div className="flex items-center space-x-2 text-xs text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/50 border border-purple-200 dark:border-purple-800/60 rounded-xl p-2.5 max-w-[85%] animate-pulse">
@@ -1025,6 +1043,7 @@ export const CaseAssistantChat: React.FC = () => {
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
               disabled={isUploadingImage}
+              maxLength={2000}
               placeholder={
                 attachedImage
                   ? 'Instrucción para el boceto (Enter para replicar)...'

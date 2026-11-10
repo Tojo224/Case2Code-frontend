@@ -165,6 +165,12 @@ export type WebSocketMessage =
       message: ChatMessage;
     }
   | {
+      type: 'MESSAGE_REJECTED';
+      reason: 'too_long' | 'rate_limited' | 'ai_rate_limited';
+      max_chars?: number;
+      retry_after?: number;
+    }
+  | {
       type: 'TYPING_INDICATOR';
       diagram_id: string;
       user_id: string;

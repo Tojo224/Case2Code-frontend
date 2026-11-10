@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCollaborationStore } from '../store/useCollaborationStore';
 import { useDiagramStore } from '../store/useDiagramStore';
 import { api } from './api';
-import { collaborationWs } from './websocket';
+import { collaborationWs, describeRejection } from './websocket';
 import type { ChatMessage } from '../types/collaboration';
 import type { CanonicalUmlDocument } from '../types/uml';
 
@@ -229,5 +229,13 @@ describe('CollaborationClient resync and chat updates', () => {
     expect(msgs[0].resolutions?.hologram.by_name).toBe('Ana');
     expect(useDiagramStore.getState().hologramCommands).toBeNull();
     expect(useDiagramStore.getState().hologramMessageId).toBeNull();
+  });
+});
+
+describe('refused chat messages', () => {
+  it('describes each rejection reason in Spanish', () => {
+    expect(describeRejection({ type: 'MESSAGE_REJECTED', reason: 'too_long', max_chars: 2000 })).toContain('2000');
+    expect(describeRejection({ type: 'MESSAGE_REJECTED', reason: 'rate_limited', retry_after: 3.2 })).toContain('4 s');
+    expect(describeRejection({ type: 'MESSAGE_REJECTED', reason: 'ai_rate_limited' })).toContain('IA');
   });
 });

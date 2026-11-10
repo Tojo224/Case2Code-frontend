@@ -6,6 +6,21 @@ import { HOLOGRAM_RESOLUTION_KEY } from '../components/assistant/aiProposals';
 
 const WS_POLICY_VIOLATION = 1008;
 
+type RejectedMessage = Extract<WebSocketMessage, { type: 'MESSAGE_REJECTED' }>;
+
+/** Spanish, user-facing text for a message the server refused. */
+export const describeRejection = (msg: RejectedMessage): string => {
+  const wait = msg.retry_after ? ` Probá de nuevo en ${Math.ceil(msg.retry_after)} s.` : '';
+  switch (msg.reason) {
+    case 'too_long':
+      return `El mensaje es demasiado largo (máximo ${msg.max_chars ?? 2000} caracteres).`;
+    case 'ai_rate_limited':
+      return `Tu mensaje se publicó, pero la IA está limitando tus pedidos.${wait}`;
+    default:
+      return `Estás enviando mensajes muy rápido.${wait}`;
+  }
+};
+
 class CollaborationClient {
   private ws: WebSocket | null = null;
   private currentDiagramId: string | null = null;
@@ -117,6 +132,9 @@ class CollaborationClient {
         ) {
           diagram.clearHologram();
         }
+        break;
+      case 'MESSAGE_REJECTED':
+        collab.setChatNotice(describeRejection(msg));
         break;
       case 'TYPING_INDICATOR':
         collab.setTypingUser(msg.user_id, msg.user_name, msg.is_typing);

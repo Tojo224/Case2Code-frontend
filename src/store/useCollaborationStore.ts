@@ -26,6 +26,8 @@ interface CollaborationState {
   chatMessages: ChatMessage[];
   typingUsers: Record<string, { userName: string; isTyping: boolean }>;
   aiMode: AiColleagueMode;
+  /** Why the server refused the last chat message (size / rate limit); null when there is none. */
+  chatNotice: string | null;
 
   setConnected: (connected: boolean) => void;
   setRoomState: (users: UserPresence[]) => void;
@@ -39,6 +41,7 @@ interface CollaborationState {
 
   // Chat Actions
   setAiMode: (mode: AiColleagueMode) => void;
+  setChatNotice: (notice: string | null) => void;
   addChatMessage: (msg: ChatMessage) => void;
   /** Replaces a message by id (e.g. a proposal that was resolved); appends it when unknown. */
   updateChatMessage: (msg: ChatMessage) => void;
@@ -90,6 +93,7 @@ export const useCollaborationStore = create<CollaborationState>((set) => ({
   chatMessages: [],
   typingUsers: {},
   aiMode: 'advisory',
+  chatNotice: null,
 
   setConnected: (connected) => set({ isConnected: connected }),
 
@@ -167,6 +171,8 @@ export const useCollaborationStore = create<CollaborationState>((set) => ({
 
   setChatMessages: (msgs) => set({ chatMessages: msgs }),
 
+  setChatNotice: (notice) => set({ chatNotice: notice }),
+
   setTypingUser: (userId, userName, isTyping) =>
     set((state) => {
       const updated = { ...state.typingUsers };
@@ -212,6 +218,7 @@ export const useCollaborationStore = create<CollaborationState>((set) => ({
       collaborators: [],
       chatMessages: [],
       typingUsers: {},
+      chatNotice: null,
     });
   },
 }));
