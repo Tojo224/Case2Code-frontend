@@ -4,10 +4,16 @@ import { useCollaborationStore } from '../../store/useCollaborationStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useVersionStore } from '../../store/useVersionStore';
 import {
+  HOLOGRAM_RESOLUTION_KEY,
   describeOperation,
+  describeResolution,
+  describeResolveError,
+  getResolution,
   isProposalFresh,
-  latestPendingHologram,
+  isViewerRole,
+  latestPendingHologramProposal,
   operationKey,
+  operationResolutionKey,
 } from './aiProposals';
 import { collaborationWs } from '../../services/websocket';
 import { api } from '../../services/api';
@@ -33,13 +39,10 @@ import {
   History,
 } from 'lucide-react';
 import { AiProviderStatus, ChatMessage } from '../../types/collaboration';
-import type { SuggestedOperation } from '../../types/versions';
 
-type OperationState =
-  | { status: 'working' }
-  | { status: 'done'; message: string }
-  | { status: 'error'; message: string }
-  | { status: 'dismissed' };
+// Local, transient state of a card: only while a request runs or after a failed one.
+// Whether a proposal was applied or discarded lives on the server (message.resolutions).
+type CardState = { status: 'working'; action: 'APPLY' | 'DISCARD' } | { status: 'error'; message: string };
 
 export const CaseAssistantChat: React.FC = () => {
   const {
@@ -48,8 +51,11 @@ export const CaseAssistantChat: React.FC = () => {
     sendAssistantPrompt,
     currentDocument,
     setHologramCommands,
-    dispatchCommands,
+    applyHologram,
     clearHologram,
+    applyRemoteDocument,
+    isApplyingHologram,
+    hologramMessageId,
   } = useDiagramStore();
   const {
     chatMessages,
@@ -58,10 +64,13 @@ export const CaseAssistantChat: React.FC = () => {
     aiMode,
     setAiMode,
     loadChatHistory,
+    collaborators,
+    updateChatMessage,
   } = useCollaborationStore();
   const { currentUser } = useAuthStore();
-  const { restore, createCheckpoint, openPanel, isWorking: isVersionWorking } = useVersionStore();
-  const [operationStates, setOperationStates] = useState<Record<string, OperationState>>({});
+  const { openPanel } = useVersionStore();
+  const [cardStates, setCardStates] = useState<Record<string, CardState>>({});
+  const isViewer = isViewerRole(collaborators, currentUser?.id);
 
   const [inputPrompt, setInputPrompt] = useState('');
   const [isUploadingImage, setIsUploadingImage] = useState(false);
@@ -128,8 +137,8 @@ export const CaseAssistantChat: React.FC = () => {
         // Bring back the AI's last still-fresh proposal as a hologram after a reload.
         const diagramState = useDiagramStore.getState();
         if (diagramState.currentDocument?.id !== diagramId || diagramState.hologramCommands) return;
-        const pending = latestPendingHologram(useCollaborationStore.getState().chatMessages);
-        if (pending) diagramState.setHologramCommands(pending);
+        const pending = latestPendingHologramProposal(useCollaborationStore.getState().chatMessages);
+        if (pending) diagramState.setHologramCommands(pending.commands, pending.id);
       });
       fetchAiStatus();
     }
@@ -300,26 +309,56 @@ export const CaseAssistantChat: React.FC = () => {
     collaborationWs.sendChatMessage(prompt, aiMode, true);
   };
 
-  const runOperation = async (key: string, op: SuggestedOperation) => {
-    if (!currentDocument) return;
-    setOperationStates((s) => ({ ...s, [key]: { status: 'working' } }));
-    const fail = (fallback: string): OperationState => ({
-      status: 'error',
-      message: useVersionStore.getState().error || fallback,
+  const clearCardState = (key: string) =>
+    setCardStates((s) => {
+      const { [key]: _removed, ...rest } = s;
+      return rest;
     });
-    let result: OperationState;
-    if (op.op === 'RESTORE_VERSION') {
-      const ok = await restore(currentDocument.id, op.version_number);
-      result = ok
-        ? { status: 'done', message: `Restauraste la versión ${op.version_number}. Se guardó el estado anterior por si querés volver.` }
-        : fail('No se pudo restaurar la versión.');
-    } else {
-      const created = await createCheckpoint(currentDocument.id, op.label);
-      result = created
-        ? { status: 'done', message: `Checkpoint v${created.number} creado.` }
-        : fail('No se pudo crear el checkpoint.');
+
+  // Approve/discard a card through the server so the outcome is shared and durable.
+  const resolveCard = async (
+    msg: ChatMessage,
+    target: 'hologram' | 'operation',
+    action: 'APPLY' | 'DISCARD',
+    key: string,
+    opts: { index?: number; isRestore?: boolean } = {},
+  ) => {
+    if (!currentDocument) return;
+    if (cardStates[key]?.status === 'working') return;
+    setCardStates((s) => ({ ...s, [key]: { status: 'working', action } }));
+    try {
+      const res = await api.resolveProposal(currentDocument.id, msg.id, {
+        target,
+        ...(target === 'operation' ? { index: opts.index } : {}),
+        action,
+        // A restore must not revert work done after the proposal was approved elsewhere.
+        ...(action === 'APPLY' && opts.isRestore ? { expected_document_version: currentDocument.version } : {}),
+      });
+      updateChatMessage(res.message);
+      if (res.document) applyRemoteDocument(res.document);
+      if (target === 'hologram' && useDiagramStore.getState().hologramMessageId === msg.id) clearHologram();
+      clearCardState(key);
+    } catch (err) {
+      const resolutionKey = target === 'hologram' ? HOLOGRAM_RESOLUTION_KEY : operationResolutionKey(opts.index ?? 0);
+      const view = describeResolveError(err, resolutionKey);
+      if (view.updatedMessage) updateChatMessage(view.updatedMessage);
+      if (target === 'hologram' && (view.kind === 'expired' || view.updatedMessage?.resolutions?.[HOLOGRAM_RESOLUTION_KEY])) {
+        if (useDiagramStore.getState().hologramMessageId === msg.id) clearHologram();
+      }
+      // An already-resolved card now renders its resolution; the text is only for real errors.
+      if (view.updatedMessage?.resolutions?.[resolutionKey]) clearCardState(key);
+      else setCardStates((s) => ({ ...s, [key]: { status: 'error', message: view.message } }));
     }
-    setOperationStates((s) => ({ ...s, [key]: result }));
+  };
+
+  const showHologram = (msg: ChatMessage) => {
+    if (msg.suggested_commands) setHologramCommands(msg.suggested_commands, msg.id);
+  };
+
+  const applyHologramCard = (msg: ChatMessage) => {
+    if (!msg.suggested_commands || isApplyingHologram) return;
+    showHologram(msg);
+    void applyHologram();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -654,43 +693,81 @@ export const CaseAssistantChat: React.FC = () => {
                   <p className="whitespace-pre-line select-text">{msg.content}</p>
 
                   {/* Hologram Suggested Commands Card */}
-                  {isAi && msg.suggested_commands && msg.suggested_commands.length > 0 && cmdCount === 0 && (
-                    <div className="mt-2.5 pt-2 border-t border-cyan-200 dark:border-cyan-900/60 space-y-2">
-                      <div className="flex items-center justify-between text-[10px] font-semibold text-cyan-700 dark:text-cyan-300">
-                        <span>👻 Propuesta en Holograma ({msg.suggested_commands.length} elementos)</span>
+                  {isAi && msg.suggested_commands && msg.suggested_commands.length > 0 && cmdCount === 0 && (() => {
+                    const holoKey = `${msg.id}:${HOLOGRAM_RESOLUTION_KEY}`;
+                    const holoResolution = getResolution(msg, HOLOGRAM_RESOLUTION_KEY);
+                    const holoState = cardStates[holoKey];
+                    const isThisHologramApplying = isApplyingHologram && hologramMessageId === msg.id;
+                    const holoBusy = holoState?.status === 'working' || isApplyingHologram;
+                    return (
+                      <div className="mt-2.5 pt-2 border-t border-cyan-200 dark:border-cyan-900/60 space-y-2">
+                        <div className="flex items-center justify-between text-[10px] font-semibold text-cyan-700 dark:text-cyan-300">
+                          <span>👻 Propuesta en Holograma ({msg.suggested_commands.length} elementos)</span>
+                        </div>
+                        {holoResolution ? (
+                          <p
+                            className={`text-[10px] font-semibold ${
+                              holoResolution.status === 'APPLIED'
+                                ? 'text-emerald-700 dark:text-emerald-300'
+                                : 'text-slate-500 dark:text-slate-400'
+                            }`}
+                          >
+                            {describeResolution(holoResolution)}
+                          </p>
+                        ) : (
+                          <>
+                            {holoState?.status === 'error' && (
+                              <p className="text-[10px] font-semibold text-red-600 dark:text-red-400">{holoState.message}</p>
+                            )}
+                            <div className="flex flex-wrap gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => showHologram(msg)}
+                                className="inline-flex items-center space-x-1 px-2.5 py-1 bg-cyan-50 dark:bg-cyan-950/60 hover:bg-cyan-100 dark:hover:bg-cyan-900 text-cyan-800 dark:text-cyan-200 border border-cyan-300 dark:border-cyan-700 rounded-lg text-[11px] font-medium transition cursor-pointer"
+                              >
+                                <Eye className="w-3 h-3" />
+                                <span>Ver Holograma</span>
+                              </button>
+                              {!isViewer && (
+                                <button
+                                  type="button"
+                                  disabled={holoBusy}
+                                  onClick={() => applyHologramCard(msg)}
+                                  className="inline-flex items-center space-x-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
+                                >
+                                  {isThisHologramApplying ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <CheckCircle2 className="w-3 h-3" />
+                                  )}
+                                  <span>{isThisHologramApplying ? 'Aplicando...' : 'Aplicar al Diagrama'}</span>
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => clearHologram()}
+                                className="inline-flex items-center space-x-1 px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-[11px] transition cursor-pointer"
+                              >
+                                <X className="w-3 h-3" />
+                                <span>Ocultar</span>
+                              </button>
+                              {!isViewer && (
+                                <button
+                                  type="button"
+                                  disabled={holoBusy}
+                                  onClick={() => resolveCard(msg, 'hologram', 'DISCARD', holoKey)}
+                                  className="inline-flex items-center space-x-1 px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-red-100 dark:hover:bg-red-950/50 disabled:opacity-60 disabled:cursor-not-allowed text-slate-600 dark:text-slate-300 rounded-lg text-[11px] transition cursor-pointer"
+                                >
+                                  <X className="w-3 h-3" />
+                                  <span>{holoState?.status === 'working' ? 'Descartando...' : 'Descartar'}</span>
+                                </button>
+                              )}
+                            </div>
+                          </>
+                        )}
                       </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setHologramCommands(msg.suggested_commands || null)}
-                          className="inline-flex items-center space-x-1 px-2.5 py-1 bg-cyan-50 dark:bg-cyan-950/60 hover:bg-cyan-100 dark:hover:bg-cyan-900 text-cyan-800 dark:text-cyan-200 border border-cyan-300 dark:border-cyan-700 rounded-lg text-[11px] font-medium transition cursor-pointer"
-                        >
-                          <Eye className="w-3 h-3" />
-                          <span>Ver Holograma</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (msg.suggested_commands) {
-                              dispatchCommands(msg.suggested_commands);
-                            }
-                          }}
-                          className="inline-flex items-center space-x-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
-                        >
-                          <CheckCircle2 className="w-3 h-3" />
-                          <span>Aplicar al Diagrama</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => clearHologram()}
-                          className="inline-flex items-center space-x-1 px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-[11px] transition cursor-pointer"
-                        >
-                          <X className="w-3 h-3" />
-                          <span>Ocultar</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {/* AI-proposed operations (restore / checkpoint): a human must approve */}
                   {isAi && msg.suggested_operations && msg.suggested_operations.length > 0 && (
@@ -699,10 +776,11 @@ export const CaseAssistantChat: React.FC = () => {
                         const view = describeOperation(op);
                         if (!view) return null;
                         const key = operationKey(msg.id, idx);
-                        const state = operationStates[key];
-                        if (state?.status === 'dismissed') return null;
+                        const state = cardStates[key];
+                        const resolution = getResolution(msg, operationResolutionKey(idx));
                         const fresh = isProposalFresh(msg.created_at);
-                        const busy = state?.status === 'working' || isVersionWorking;
+                        const busy = state?.status === 'working';
+                        const approving = state?.status === 'working' && state.action === 'APPLY';
                         return (
                           <div
                             key={key}
@@ -715,33 +793,49 @@ export const CaseAssistantChat: React.FC = () => {
                             {view.detail && (
                               <p className="text-[10px] text-amber-900/80 dark:text-amber-200/80">{view.detail}</p>
                             )}
-                            {state?.status === 'done' && (
-                              <p className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">{state.message}</p>
+                            {resolution && (
+                              <p
+                                className={`text-[10px] font-semibold ${
+                                  resolution.status === 'APPLIED'
+                                    ? 'text-emerald-700 dark:text-emerald-300'
+                                    : 'text-slate-500 dark:text-slate-400'
+                                }`}
+                              >
+                                {describeResolution(resolution)}
+                                {resolution.detail ? `. ${resolution.detail}` : ''}
+                              </p>
                             )}
-                            {state?.status === 'error' && (
+                            {!resolution && state?.status === 'error' && (
                               <p className="text-[10px] font-semibold text-red-600 dark:text-red-400">{state.message}</p>
                             )}
-                            {state?.status === 'done' ? null : !fresh ? (
+                            {resolution ? null : !fresh ? (
                               <p className="text-[10px] text-slate-500 dark:text-slate-400">Propuesta vencida: pedímela de nuevo.</p>
+                            ) : isViewer ? (
+                              <p className="text-[10px] text-slate-500 dark:text-slate-400">Solo un editor puede aprobar esta propuesta.</p>
                             ) : (
                               <div className="flex flex-wrap gap-1.5">
                                 <button
                                   type="button"
                                   disabled={busy}
-                                  onClick={() => runOperation(key, op)}
+                                  onClick={() =>
+                                    resolveCard(msg, 'operation', 'APPLY', key, {
+                                      index: idx,
+                                      isRestore: op.op === 'RESTORE_VERSION',
+                                    })
+                                  }
                                   className="inline-flex items-center space-x-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-xs"
                                 >
-                                  {state?.status === 'working' ? (
+                                  {approving ? (
                                     <Loader2 className="w-3 h-3 animate-spin" />
                                   ) : (
                                     <CheckCircle2 className="w-3 h-3" />
                                   )}
-                                  <span>{state?.status === 'working' ? 'Aplicando...' : view.confirmLabel}</span>
+                                  <span>{approving ? 'Aplicando...' : view.confirmLabel}</span>
                                 </button>
                                 <button
                                   type="button"
                                   disabled={busy}
-                                  onClick={() => setOperationStates((s) => ({ ...s, [key]: { status: 'dismissed' } }))}
+                                  onClick={() => resolveCard(msg, 'operation', 'DISCARD', key, { index: idx })}
                                   className="inline-flex items-center space-x-1 px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-60 text-slate-600 dark:text-slate-300 rounded-lg text-[11px] transition cursor-pointer"
                                 >
                                   <X className="w-3 h-3" />

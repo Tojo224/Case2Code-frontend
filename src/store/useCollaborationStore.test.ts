@@ -1,7 +1,16 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { useCollaborationStore } from './useCollaborationStore';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { useCollaborationStore, mergeChatHistory } from './useCollaborationStore';
 import { useDiagramStore } from './useDiagramStore';
 import { CanonicalUmlDocument } from '../types/uml';
+import type { ChatMessage } from '../types/collaboration';
+import { api } from '../services/api';
+
+vi.mock('../services/api', () => ({
+  api: {
+    getChatHistory: vi.fn(),
+    getDiagram: vi.fn(),
+  },
+}));
 
 describe('useCollaborationStore and Real-Time Multi-user Sync', () => {
   beforeEach(() => {
@@ -142,6 +151,63 @@ describe('useCollaborationStore and Real-Time Multi-user Sync', () => {
 
     store.setTypingUser('usr-student', 'Ana Gómez', false);
     expect(useCollaborationStore.getState().typingUsers['usr-student']).toBeUndefined();
+  });
+
+  describe('chat updates and history merge', () => {
+    const m = (id: string, diagram_id = 'd1', extra: Partial<ChatMessage> = {}): ChatMessage => ({
+      id,
+      diagram_id,
+      sender_id: 'u',
+      sender_name: 'U',
+      sender_avatar_color: '#000',
+      sender_type: 'USER',
+      content: id,
+      created_at: `2026-01-01T00:00:0${id.length}Z`,
+      ...extra,
+    });
+
+    beforeEach(() => {
+      vi.mocked(api.getChatHistory).mockReset();
+    });
+
+    it('updateChatMessage replaces by id and appends unknown messages', () => {
+      const store = useCollaborationStore.getState();
+      store.addChatMessage(m('a'));
+      store.updateChatMessage(m('a', 'd1', { content: 'changed' }));
+      store.updateChatMessage(m('bb'));
+      const msgs = useCollaborationStore.getState().chatMessages;
+      expect(msgs.map((x) => x.id)).toEqual(['a', 'bb']);
+      expect(msgs[0].content).toBe('changed');
+    });
+
+    it('loadChatHistory keeps messages that arrived over the socket meanwhile', async () => {
+      let resolveFetch!: (v: any) => void;
+      vi.mocked(api.getChatHistory).mockReturnValue(new Promise((r) => (resolveFetch = r)));
+      const pending = useCollaborationStore.getState().loadChatHistory('d1');
+      useCollaborationStore.getState().addChatMessage(m('live'));
+      resolveFetch({ diagram_id: 'd1', messages: [m('h')] });
+      await pending;
+      expect(useCollaborationStore.getState().chatMessages.map((x) => x.id)).toEqual(['h', 'live']);
+    });
+
+    it('loadChatHistory ignores a stale response for another diagram', async () => {
+      let resolveOld!: (v: any) => void;
+      vi.mocked(api.getChatHistory)
+        .mockReturnValueOnce(new Promise((r) => (resolveOld = r)))
+        .mockResolvedValueOnce({ diagram_id: 'd2', messages: [m('new', 'd2')] });
+      const old = useCollaborationStore.getState().loadChatHistory('d1');
+      await useCollaborationStore.getState().loadChatHistory('d2');
+      resolveOld({ diagram_id: 'd1', messages: [m('old', 'd1')] });
+      await old;
+      expect(useCollaborationStore.getState().chatMessages.map((x) => x.id)).toEqual(['new']);
+    });
+
+    it('merge keeps the copy with more resolutions', () => {
+      const resolved = m('a', 'd1', {
+        resolutions: { hologram: { status: 'APPLIED', by_id: 'u', by_name: 'Ana', at: 'x' } },
+      });
+      expect(mergeChatHistory([resolved], [m('a')], 'd1')[0].resolutions?.hologram).toBeDefined();
+    });
   });
 });
 

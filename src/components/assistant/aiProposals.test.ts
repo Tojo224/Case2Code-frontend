@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatMessage } from '../../types/collaboration';
 import {
+  HOLOGRAM_RESOLUTION_KEY,
   PROPOSAL_TTL_MS,
   describeOperation,
+  describeResolution,
+  describeResolveError,
+  getResolution,
   isProposalFresh,
+  isViewerRole,
   latestPendingHologram,
+  latestPendingHologramProposal,
   operationKey,
+  operationResolutionKey,
   parseMessageTime,
 } from './aiProposals';
 
@@ -76,6 +83,82 @@ describe('latestPendingHologram', () => {
   it('ignores human messages and returns null when there is nothing', () => {
     expect(latestPendingHologram([msg({ sender_type: 'USER', suggested_commands: [cmd] })], NOW)).toBeNull();
     expect(latestPendingHologram([], NOW)).toBeNull();
+  });
+});
+
+describe('resolved proposals', () => {
+  const resolved = {
+    status: 'APPLIED' as const,
+    by_id: 'u1',
+    by_name: 'Ana',
+    at: '2026-01-01T11:55:00Z',
+  };
+
+  it('does not restore a hologram somebody already resolved', () => {
+    const m = msg({ suggested_commands: [cmd], resolutions: { hologram: resolved } });
+    expect(latestPendingHologram([m], NOW)).toBeNull();
+    expect(latestPendingHologramProposal([m], NOW)).toBeNull();
+  });
+
+  it('returns the message id with the pending hologram', () => {
+    expect(latestPendingHologramProposal([msg({ id: 'm9', suggested_commands: [cmd] })], NOW)).toEqual({
+      id: 'm9',
+      commands: [cmd],
+    });
+  });
+
+  it('describes who resolved a card, with counts for holograms', () => {
+    expect(describeResolution(resolved)).toBe('Aplicado por Ana');
+    expect(describeResolution({ ...resolved, status: 'DISCARDED' })).toBe('Descartado por Ana');
+    expect(describeResolution({ ...resolved, applied_count: 3, skipped_count: 1 })).toBe(
+      'Aplicado por Ana (3 cambios, 1 omitido)',
+    );
+  });
+
+  it('reads resolutions by key', () => {
+    const m = msg({ resolutions: { [operationResolutionKey(1)]: resolved } });
+    expect(getResolution(m, 'op:1')).toEqual(resolved);
+    expect(getResolution(m, 'op:0')).toBeNull();
+    expect(getResolution(m, HOLOGRAM_RESOLUTION_KEY)).toBeNull();
+  });
+});
+
+describe('isViewerRole', () => {
+  const collabs = [
+    { id: '1', diagram_id: 'd', user_id: 'v', role: 'VIEWER' as const },
+    { id: '2', diagram_id: 'd', user_id: 'e', role: 'EDITOR' as const },
+  ];
+  it('is true only for a known viewer', () => {
+    expect(isViewerRole(collabs, 'v')).toBe(true);
+    expect(isViewerRole(collabs, 'e')).toBe(false);
+    expect(isViewerRole(collabs, 'unknown')).toBe(false);
+    expect(isViewerRole(collabs, null)).toBe(false);
+  });
+});
+
+describe('describeResolveError', () => {
+  const resolvedMsg = msg({
+    resolutions: { 'op:0': { status: 'APPLIED', by_id: 'u1', by_name: 'Ana', at: 'x' } },
+  });
+  const apiErr = (status: number, body?: unknown) => Object.assign(new Error('boom'), { status, body });
+
+  it('409 with a resolution shows who resolved it and returns the fresh message', () => {
+    const view = describeResolveError(apiErr(409, { detail: 'x', message: resolvedMsg }), 'op:0');
+    expect(view.kind).toBe('conflict');
+    expect(view.message).toBe('Aplicado por Ana');
+    expect(view.updatedMessage).toBe(resolvedMsg);
+  });
+  it('409 without a resolution is a version conflict', () => {
+    const view = describeResolveError(apiErr(409, { detail: 'version' }), 'op:0');
+    expect(view.message).toContain('cambió');
+    expect(view.updatedMessage).toBeNull();
+  });
+  it('maps 410 and 403', () => {
+    expect(describeResolveError(apiErr(410), 'op:0').message).toContain('Propuesta vencida');
+    expect(describeResolveError(apiErr(403), 'op:0').kind).toBe('forbidden');
+  });
+  it('falls back to the error message', () => {
+    expect(describeResolveError(apiErr(500), 'op:0')).toMatchObject({ kind: 'other', message: 'boom' });
   });
 });
 
