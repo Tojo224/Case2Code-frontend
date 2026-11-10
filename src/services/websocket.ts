@@ -2,6 +2,8 @@ import { useCollaborationStore } from '../store/useCollaborationStore';
 import { useDiagramStore } from '../store/useDiagramStore';
 import { WebSocketMessage } from '../types/collaboration';
 
+const WS_POLICY_VIOLATION = 1008;
+
 class CollaborationClient {
   private ws: WebSocket | null = null;
   private currentDiagramId: string | null = null;
@@ -10,7 +12,11 @@ class CollaborationClient {
   private lastCursorSend = 0;
 
   connect(diagramId: string, token?: string | null) {
-    if (this.ws && this.currentDiagramId === diagramId) {
+    // Only skip when the existing socket is alive: a CLOSING/CLOSED socket must be replaced,
+    // otherwise the reconnect timer would hit this early return forever.
+    const state = this.ws?.readyState;
+    const isAlive = state === WebSocket.CONNECTING || state === WebSocket.OPEN;
+    if (this.ws && isAlive && this.currentDiagramId === diagramId) {
       return;
     }
     this.disconnect();
@@ -23,13 +29,19 @@ class CollaborationClient {
     const wsUrl = `${protocol}//${host}/api/diagrams/${diagramId}/ws${tokenQuery}`;
 
     try {
-      this.ws = new WebSocket(wsUrl);
+      const socket = new WebSocket(wsUrl);
+      this.ws = socket;
+      // Events of a socket that was already replaced (diagram switch, manual reconnect)
+      // must not touch the shared state or schedule reconnects.
+      const isCurrent = () => this.ws === socket;
 
-      this.ws.onopen = () => {
+      socket.onopen = () => {
+        if (!isCurrent()) return;
         useCollaborationStore.getState().setConnected(true);
       };
 
-      this.ws.onmessage = (event) => {
+      socket.onmessage = (event) => {
+        if (!isCurrent()) return;
         try {
           const msg: WebSocketMessage = JSON.parse(event.data);
           this.handleMessage(msg);
@@ -38,14 +50,18 @@ class CollaborationClient {
         }
       };
 
-      this.ws.onclose = () => {
+      socket.onclose = (event) => {
+        if (!isCurrent()) return;
+        this.ws = null;
         useCollaborationStore.getState().setConnected(false);
-        if (!this.isIntentionallyClosed) {
+        // 1008 = policy violation (no access / expired token): retrying would loop forever.
+        if (!this.isIntentionallyClosed && event.code !== WS_POLICY_VIOLATION) {
           this.scheduleReconnect();
         }
       };
 
-      this.ws.onerror = () => {
+      socket.onerror = () => {
+        if (!isCurrent()) return;
         useCollaborationStore.getState().setConnected(false);
       };
     } catch {
