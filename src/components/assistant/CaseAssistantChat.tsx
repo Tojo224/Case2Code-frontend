@@ -391,7 +391,7 @@ export const CaseAssistantChat: React.FC = () => {
       onDragOver={(e) => e.preventDefault()}
       onDrop={handleDrop}
       style={{ width: typeof window !== 'undefined' && window.innerWidth >= 640 ? `${chatWidth}px` : undefined }}
-      className="fixed right-0 sm:right-4 top-14 sm:top-16 bottom-0 sm:bottom-4 w-full max-w-[95vw] bg-white dark:bg-slate-900 border-l sm:border border-slate-200/90 dark:border-slate-800 rounded-none sm:rounded-2xl shadow-2xl flex flex-col z-40 overflow-hidden animate-in slide-in-from-right duration-200 transition-colors"
+      className="fixed right-0 sm:right-4 top-[var(--c2c-header-h,3.5rem)] sm:top-[calc(var(--c2c-header-h,3.5rem)_+_0.5rem)] bottom-0 sm:bottom-4 w-full max-w-[95vw] bg-white dark:bg-slate-900 border-l sm:border border-slate-200/90 dark:border-slate-800 rounded-none sm:rounded-2xl shadow-2xl flex flex-col z-40 overflow-hidden animate-in slide-in-from-right duration-200 transition-colors"
     >
       {/* Left edge drag resize handle (Desktop) */}
       <div

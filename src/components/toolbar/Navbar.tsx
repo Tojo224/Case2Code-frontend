@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useDiagramStore } from '../../store/useDiagramStore';
 import {
   Code2,
@@ -58,7 +58,22 @@ export const Navbar: React.FC = () => {
   const [newDiagName, setNewDiagName] = useState('');
   const [selectedImportFile, setSelectedImportFile] = useState<File | null>(null);
 
+  const headerRef = useRef<HTMLElement>(null);
   const importFileInputRef = useRef<HTMLInputElement>(null);
+
+  // The header wraps onto several rows on narrow screens: publish its real height so panels
+  // that hang from it (the AI chat) start below it instead of being covered by it.
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const publish = () =>
+      document.documentElement.style.setProperty('--c2c-header-h', `${Math.round(el.getBoundingClientRect().height)}px`);
+    publish();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(publish);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
   const newDiagFileInputRef = useRef<HTMLInputElement>(null);
 
   const handleAddClass = () => {
@@ -90,7 +105,10 @@ export const Navbar: React.FC = () => {
   };
 
   return (
-    <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm z-30 relative transition-colors">
+    <header
+      ref={headerRef}
+      className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm z-[45] relative transition-colors"
+    >
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-3 sm:px-4 min-h-14 py-1">
         {/* Brand & Project Info */}
         <div className="flex items-center gap-2 shrink-0 min-w-0">
