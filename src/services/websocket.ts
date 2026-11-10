@@ -1,6 +1,25 @@
 import { useCollaborationStore } from '../store/useCollaborationStore';
 import { useDiagramStore } from '../store/useDiagramStore';
 import { WebSocketMessage } from '../types/collaboration';
+import { api } from './api';
+import { HOLOGRAM_RESOLUTION_KEY } from '../components/assistant/aiProposals';
+
+const WS_POLICY_VIOLATION = 1008;
+
+type RejectedMessage = Extract<WebSocketMessage, { type: 'MESSAGE_REJECTED' }>;
+
+/** Spanish, user-facing text for a message the server refused. */
+export const describeRejection = (msg: RejectedMessage): string => {
+  const wait = msg.retry_after ? ` Probá de nuevo en ${Math.ceil(msg.retry_after)} s.` : '';
+  switch (msg.reason) {
+    case 'too_long':
+      return `El mensaje es demasiado largo (máximo ${msg.max_chars ?? 2000} caracteres).`;
+    case 'ai_rate_limited':
+      return `Tu mensaje se publicó, pero la IA está limitando tus pedidos.${wait}`;
+    default:
+      return `Estás enviando mensajes muy rápido.${wait}`;
+  }
+};
 
 class CollaborationClient {
   private ws: WebSocket | null = null;
@@ -8,12 +27,18 @@ class CollaborationClient {
   private reconnectTimeout: number | null = null;
   private isIntentionallyClosed = false;
   private lastCursorSend = 0;
+  // Diagram whose socket has opened at least once since the last intentional disconnect.
+  private openedDiagramId: string | null = null;
 
   connect(diagramId: string, token?: string | null) {
-    if (this.ws && this.currentDiagramId === diagramId) {
+    // Only skip when the existing socket is alive: a CLOSING/CLOSED socket must be replaced,
+    // otherwise the reconnect timer would hit this early return forever.
+    const state = this.ws?.readyState;
+    const isAlive = state === WebSocket.CONNECTING || state === WebSocket.OPEN;
+    if (this.ws && isAlive && this.currentDiagramId === diagramId) {
       return;
     }
-    this.disconnect();
+    this.teardown();
     this.isIntentionallyClosed = false;
     this.currentDiagramId = diagramId;
 
@@ -23,13 +48,23 @@ class CollaborationClient {
     const wsUrl = `${protocol}//${host}/api/diagrams/${diagramId}/ws${tokenQuery}`;
 
     try {
-      this.ws = new WebSocket(wsUrl);
+      const socket = new WebSocket(wsUrl);
+      this.ws = socket;
+      // Events of a socket that was already replaced (diagram switch, manual reconnect)
+      // must not touch the shared state or schedule reconnects.
+      const isCurrent = () => this.ws === socket;
 
-      this.ws.onopen = () => {
+      socket.onopen = () => {
+        if (!isCurrent()) return;
         useCollaborationStore.getState().setConnected(true);
+        // A re-open of the same diagram means we were offline: catch up on what we missed.
+        const isReopen = this.openedDiagramId === diagramId;
+        this.openedDiagramId = diagramId;
+        if (isReopen) void this.resync(diagramId);
       };
 
-      this.ws.onmessage = (event) => {
+      socket.onmessage = (event) => {
+        if (!isCurrent()) return;
         try {
           const msg: WebSocketMessage = JSON.parse(event.data);
           this.handleMessage(msg);
@@ -38,14 +73,18 @@ class CollaborationClient {
         }
       };
 
-      this.ws.onclose = () => {
+      socket.onclose = (event) => {
+        if (!isCurrent()) return;
+        this.ws = null;
         useCollaborationStore.getState().setConnected(false);
-        if (!this.isIntentionallyClosed) {
+        // 1008 = policy violation (no access / expired token): retrying would loop forever.
+        if (!this.isIntentionallyClosed && event.code !== WS_POLICY_VIOLATION) {
           this.scheduleReconnect();
         }
       };
 
-      this.ws.onerror = () => {
+      socket.onerror = () => {
+        if (!isCurrent()) return;
         useCollaborationStore.getState().setConnected(false);
       };
     } catch {
@@ -79,10 +118,23 @@ class CollaborationClient {
       case 'CHAT_MESSAGE':
         collab.addChatMessage(msg.message);
         if (msg.message.suggested_commands && msg.message.suggested_commands.length > 0) {
-          diagram.setHologramCommands(msg.message.suggested_commands);
+          diagram.setHologramCommands(msg.message.suggested_commands, msg.message.id);
         } else if (msg.message.executed_commands && msg.message.executed_commands.length > 0) {
           diagram.clearHologram();
         }
+        break;
+      case 'CHAT_MESSAGE_UPDATED':
+        collab.updateChatMessage(msg.message);
+        // Somebody applied or discarded the proposal behind the visible hologram.
+        if (
+          diagram.hologramMessageId === msg.message.id &&
+          msg.message.resolutions?.[HOLOGRAM_RESOLUTION_KEY]
+        ) {
+          diagram.clearHologram();
+        }
+        break;
+      case 'MESSAGE_REJECTED':
+        collab.setChatNotice(describeRejection(msg));
         break;
       case 'TYPING_INDICATOR':
         collab.setTypingUser(msg.user_id, msg.user_name, msg.is_typing);
@@ -93,11 +145,14 @@ class CollaborationClient {
     }
   }
 
-  sendChatMessage(content: string, aiMode: string = 'advisory') {
+  // forceAi: the sender is addressing the AI directly (assistant panel). Without it the backend
+  // only wakes the AI on an explicit mention (@ai, @senior, @bot, /ai).
+  sendChatMessage(content: string, aiMode: string = 'advisory', forceAi: boolean = false) {
     this.send({
       type: 'SEND_CHAT_MESSAGE',
       content,
       ai_mode: aiMode,
+      force_ai: forceAi,
     });
   }
 
@@ -133,7 +188,28 @@ class CollaborationClient {
     }
   }
 
+  /** Refetches the document and chat that were missed while the socket was down. */
+  private async resync(diagramId: string) {
+    try {
+      const doc = await api.getDiagram(diagramId);
+      if (this.currentDiagramId === diagramId) {
+        useDiagramStore.getState().applyRemoteDocument(doc);
+      }
+    } catch {
+      // the next DOCUMENT_UPDATED or reconnect will catch up
+    }
+    if (this.currentDiagramId === diagramId) {
+      await useCollaborationStore.getState().loadChatHistory(diagramId);
+    }
+  }
+
   disconnect() {
+    this.teardown();
+    // After an intentional disconnect the next open is a fresh start, not a reconnect.
+    this.openedDiagramId = null;
+  }
+
+  private teardown() {
     this.isIntentionallyClosed = true;
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);

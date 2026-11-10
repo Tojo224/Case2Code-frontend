@@ -1,4 +1,5 @@
 import { CanonicalUmlDocument, UmlCommand } from './uml';
+import type { SuggestedOperation } from './versions';
 
 export type CollaboratorRole = 'OWNER' | 'EDITOR' | 'VIEWER';
 
@@ -40,6 +41,46 @@ export interface AuthResponse {
 
 export type SenderType = 'USER' | 'AI';
 
+export type ProposalResolutionStatus = 'APPLIED' | 'DISCARDED';
+
+/** Who resolved an AI proposal. Keyed by "hologram" or "op:<index>" in ChatMessage.resolutions. */
+export interface ProposalResolution {
+  status: ProposalResolutionStatus;
+  by_id: string;
+  by_name: string;
+  at: string;
+  detail?: string;
+  applied_count?: number;
+  skipped_count?: number;
+}
+
+export interface SkippedCommand {
+  command: UmlCommand;
+  reason: string;
+}
+
+export interface BatchCommandsResponse {
+  document: CanonicalUmlDocument;
+  applied: UmlCommand[];
+  skipped: SkippedCommand[];
+}
+
+export type ResolveTarget = 'hologram' | 'operation';
+
+export interface ResolveProposalRequest {
+  target: ResolveTarget;
+  index?: number;
+  action: 'APPLY' | 'DISCARD';
+  expected_document_version?: number | null;
+}
+
+export interface ResolveProposalResponse {
+  message: ChatMessage;
+  document: CanonicalUmlDocument | null;
+  applied_count: number | null;
+  skipped: SkippedCommand[] | null;
+}
+
 export interface ChatMessage {
   id: string;
   diagram_id: string;
@@ -52,7 +93,9 @@ export interface ChatMessage {
   ai_engine?: string | null;
   executed_commands?: UmlCommand[] | null;
   suggested_commands?: UmlCommand[] | null;
+  suggested_operations?: SuggestedOperation[] | null;
   applied_commands_count?: number;
+  resolutions?: Record<string, ProposalResolution> | null;
   created_at: string;
 }
 
@@ -115,6 +158,17 @@ export type WebSocketMessage =
       type: 'CHAT_MESSAGE';
       diagram_id: string;
       message: ChatMessage;
+    }
+  | {
+      type: 'CHAT_MESSAGE_UPDATED';
+      diagram_id: string;
+      message: ChatMessage;
+    }
+  | {
+      type: 'MESSAGE_REJECTED';
+      reason: 'too_long' | 'rate_limited' | 'ai_rate_limited';
+      max_chars?: number;
+      retry_after?: number;
     }
   | {
       type: 'TYPING_INDICATOR';
