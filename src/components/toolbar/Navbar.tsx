@@ -3,18 +3,14 @@ import { useDiagramStore } from '../../store/useDiagramStore';
 import {
   Code2,
   Database,
-  Download,
-  Smartphone,
   Plus,
   AlertCircle,
   RefreshCw,
   FolderPlus,
   Bot,
-  FileDown,
   FileUp,
   HelpCircle,
   History,
-  FileText,
   Undo2,
   Redo2,
 } from 'lucide-react';
@@ -22,6 +18,7 @@ import { useUndoStore } from '../../store/useUndoStore';
 import { CollaboratorAvatars } from '../collaboration/CollaboratorAvatars';
 import { UserMenu } from '../auth/UserMenu';
 import { ThemeToggle } from './ThemeToggle';
+import { GenerateMenu } from './GenerateMenu';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useTourStore } from '../../store/useTourStore';
 import { useVersionStore } from '../../store/useVersionStore';
@@ -42,23 +39,15 @@ export const Navbar: React.FC = () => {
     diagramsList,
     createDiagram,
     loadDiagram,
-    generateBackend,
-    generateMobileApp,
-    isGenerating,
-    isGeneratingMobile,
     error,
     clearError,
     isAssistantOpen,
     toggleAssistant,
     openCreateClassModal,
     openSqlModal,
-    exportXmi,
     importXmi,
     importNewDiagramXmi,
-    isExportingXmi,
     isImportingXmi,
-    exportDocs,
-    isExportingDocs,
   } = useDiagramStore();
 
   const currentUser = useAuthStore((s) => s.currentUser);
@@ -102,7 +91,7 @@ export const Navbar: React.FC = () => {
 
   return (
     <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm z-30 relative transition-colors">
-      <div className="flex items-center justify-between gap-2 px-3 sm:px-4 h-14">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-3 sm:px-4 min-h-14 py-1">
         {/* Brand & Project Info */}
         <div className="flex items-center gap-2 shrink-0 min-w-0">
           <div className="bg-sky-600 dark:bg-sky-500 text-white p-1.5 rounded-lg shadow-sm shrink-0">
@@ -142,8 +131,8 @@ export const Navbar: React.FC = () => {
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-1 sm:gap-1.5 2xl:gap-2 min-w-0">
-          <div className="flex items-center gap-1 sm:gap-1.5 2xl:gap-2 min-w-0 overflow-x-auto c2c-toolbar-scroll py-1">
+        <div className="flex flex-wrap items-center justify-end gap-1 sm:gap-1.5 2xl:gap-2 min-w-0 ml-auto">
+          <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 2xl:gap-2 min-w-0 py-1">
             <button
               data-tour="navbar-add-class"
               onClick={handleAddClass}
@@ -199,20 +188,6 @@ export const Navbar: React.FC = () => {
             </button>
 
             <button
-              onClick={exportDocs}
-              disabled={isExportingDocs || !currentDocument || currentDocument.classes.length === 0}
-              title="Descargar diccionario de datos y reglas de negocio (PDF)"
-              className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold px-2.5 py-1.5 rounded-md shadow-sm transition cursor-pointer shrink-0 whitespace-nowrap"
-            >
-              {isExportingDocs ? (
-                <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
-              ) : (
-                <FileText className="w-3.5 h-3.5 shrink-0" />
-              )}
-              <span className="hidden xl:inline">Docs</span>
-            </button>
-
-            <button
               data-tour="navbar-history"
               onClick={openVersionPanel}
               disabled={!currentDocument}
@@ -224,77 +199,16 @@ export const Navbar: React.FC = () => {
               <span className="hidden xl:inline">Historial</span>
             </button>
 
-            <button
-              data-tour="navbar-springboot"
-              onClick={() => generateBackend(false)}
-              disabled={isGenerating || !currentDocument || currentDocument.classes.length === 0}
-              title="Generar Backend Spring Boot"
-              className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold px-2.5 py-1.5 rounded-md shadow-sm transition cursor-pointer shrink-0 whitespace-nowrap"
-            >
-              {isGenerating ? (
-                <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
-              ) : (
-                <Download className="w-3.5 h-3.5 shrink-0" />
-              )}
-              <span className="hidden lg:inline">{isGenerating ? 'Generando...' : 'Spring Boot'}</span>
-            </button>
+            <GenerateMenu onImportClick={() => importFileInputRef.current?.click()} />
 
-            <button
-              data-tour="navbar-flutter"
-              onClick={generateMobileApp}
-              disabled={isGeneratingMobile || !currentDocument || currentDocument.classes.length === 0}
-              title="Generar App Móvil Genérica (Flutter Material 3)"
-              className="flex items-center gap-1.5 bg-cyan-600 hover:bg-cyan-700 dark:bg-cyan-600 dark:hover:bg-cyan-500 disabled:opacity-50 text-white text-xs font-semibold px-2.5 py-1.5 rounded-md shadow-sm transition cursor-pointer shrink-0 whitespace-nowrap"
-            >
-              {isGeneratingMobile ? (
-                <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
-              ) : (
-                <Smartphone className="w-3.5 h-3.5 shrink-0" />
-              )}
-              <span className="hidden xl:inline">{isGeneratingMobile ? 'Generando...' : 'Flutter App'}</span>
-            </button>
-
-            {/* Enterprise Architect XMI Interchange Controls */}
-            <div
-              data-tour="navbar-xmi"
-              className="flex items-center gap-1 border border-slate-200 dark:border-slate-700 rounded-md p-0.5 bg-slate-50 dark:bg-slate-800/80 shrink-0"
-            >
-              <button
-                onClick={exportXmi}
-                disabled={isExportingXmi || !currentDocument || currentDocument.classes.length === 0}
-                title="Exportar a Enterprise Architect (XMI 2.1)"
-                className="flex items-center gap-1 text-slate-700 dark:text-slate-200 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-white dark:hover:bg-slate-700 px-2 py-1 rounded text-xs font-medium transition disabled:opacity-40 shrink-0 whitespace-nowrap"
-              >
-                {isExportingXmi ? (
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-sky-600 shrink-0" />
-                ) : (
-                  <FileDown className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
-                )}
-                <span className="hidden 2xl:inline">Exportar EA</span>
-              </button>
-
-              <button
-                onClick={() => importFileInputRef.current?.click()}
-                disabled={isImportingXmi || !currentDocument}
-                title="Importar modelo desde Enterprise Architect (XMI 2.1)"
-                className="flex items-center gap-1 text-slate-700 dark:text-slate-200 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-white dark:hover:bg-slate-700 px-2 py-1 rounded text-xs font-medium transition disabled:opacity-40 shrink-0 whitespace-nowrap"
-              >
-                {isImportingXmi ? (
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-600 shrink-0" />
-                ) : (
-                  <FileUp className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                )}
-                <span className="hidden 2xl:inline">Importar EA</span>
-              </button>
-
-              <input
-                ref={importFileInputRef}
-                type="file"
-                accept=".xmi,.xml"
-                className="hidden"
-                onChange={handleImportFileChange}
-              />
-            </div>
+            {/* Hidden file picker for the Enterprise Architect import (lives outside the menu so it stays mounted) */}
+            <input
+              ref={importFileInputRef}
+              type="file"
+              accept=".xmi,.xml"
+              className="hidden"
+              onChange={handleImportFileChange}
+            />
           </div>
 
           <div className="hidden sm:block h-6 w-px bg-slate-200 dark:bg-slate-800 mx-0.5 shrink-0" />

@@ -207,7 +207,7 @@ const STEP_LIST: TourStepDef[] = [
       'Cada clase es una entidad de tu modelo y se convierte en una tabla. ' +
       'Hacé clic en <strong>Clase</strong> en la barra superior para abrir el formulario.',
     side: 'bottom',
-    align: 'end',
+    align: 'center',
     interactive: true,
     advanceOnClick: true,
     wait: true,
@@ -222,7 +222,7 @@ const STEP_LIST: TourStepDef[] = [
       'Escribí el nombre de la clase, por ejemplo <strong>Cliente</strong>. ' +
       'El estereotipo <em>entity</em> ya viene elegido: indica que es una tabla de la base de datos.',
     side: 'right',
-    align: 'start',
+    align: 'center',
     interactive: true,
     wait: true,
     optional: true,
@@ -238,7 +238,7 @@ const STEP_LIST: TourStepDef[] = [
       'Cada fila es una columna de la tabla. Ya viene un <strong>id</strong> como clave primaria. ' +
       'Con <strong>+ Atributo</strong> sumás más, eligiendo nombre y tipo (por ejemplo <em>nombre: String</em>).',
     side: 'right',
-    align: 'start',
+    align: 'center',
     interactive: true,
     wait: true,
     optional: true,
@@ -251,7 +251,7 @@ const STEP_LIST: TourStepDef[] = [
     description:
       'Presioná <strong>Crear Clase</strong> (o <kbd>Ctrl</kbd> + <kbd>Enter</kbd>) para agregarla al diagrama.',
     side: 'top',
-    align: 'end',
+    align: 'center',
     interactive: true,
     wait: true,
     optional: true,
@@ -266,7 +266,7 @@ const STEP_LIST: TourStepDef[] = [
       'Los atributos son las columnas de la tabla. Al pie de la clase hacé clic en <strong>+ Agregar atributo</strong>, ' +
       'poné un nombre (por ejemplo <em>nombre</em>) y un tipo.',
     side: 'right',
-    align: 'start',
+    align: 'center',
     interactive: true,
     optional: true,
     done: (snap) => snap.hasNonPkAttribute,
@@ -292,7 +292,7 @@ const STEP_LIST: TourStepDef[] = [
       'En este panel están todas las relaciones. <strong>1 : N</strong> significa que un registro de la primera ' +
       'clase se vincula con muchos de la segunda (un cliente, muchos pedidos). Hacé clic para activar el modo conexión.',
     side: 'right',
-    align: 'start',
+    align: 'center',
     interactive: true,
     advanceOnClick: true,
     wait: true,
@@ -342,7 +342,7 @@ const STEP_LIST: TourStepDef[] = [
       'Acá definís el tipo, la <strong>cardinalidad</strong> de cada extremo (por ejemplo 1 en Cliente y * en Pedido) ' +
       'y los <strong>roles</strong>, que dan nombre a las claves foráneas.',
     side: 'right',
-    align: 'start',
+    align: 'center',
     interactive: true,
     wait: true,
     optional: true,
@@ -354,7 +354,7 @@ const STEP_LIST: TourStepDef[] = [
     title: 'Guardá la relación',
     description: 'Presioná <strong>Guardar Cambios</strong> para confirmarla. Vas a verla dibujada entre las dos clases.',
     side: 'top',
-    align: 'end',
+    align: 'center',
     interactive: true,
     wait: true,
     optional: true,
@@ -368,7 +368,7 @@ const STEP_LIST: TourStepDef[] = [
     description:
       'Abrí el chat y pedile ayuda con el modelado, por ejemplo: <em>«Agregá una clase Producto con nombre y precio»</em>.',
     side: 'bottom',
-    align: 'end',
+    align: 'center',
     interactive: true,
     advanceOnClick: true,
     done: (snap) => snap.isAssistantOpen,
@@ -384,7 +384,7 @@ const STEP_LIST: TourStepDef[] = [
       'Con <strong>SQL</strong> ves el script de tu base de datos al instante. Al lado, <strong>Spring Boot</strong> y ' +
       '<strong>Flutter</strong> generan un backend y una app a partir de tu diagrama.',
     side: 'bottom',
-    align: 'end',
+    align: 'center',
     interactive: true,
     advanceOnClick: true,
     done: (snap) => snap.isSqlModalOpen,
@@ -399,7 +399,7 @@ const STEP_LIST: TourStepDef[] = [
       'Una versión es como una foto de tu diagrama: podés volver a ella cuando quieras. ' +
       'Abrí el <strong>Historial</strong> y guardá un punto de control.',
     side: 'bottom',
-    align: 'end',
+    align: 'center',
     interactive: true,
     advanceOnClick: true,
     optional: true,
@@ -413,7 +413,7 @@ const STEP_LIST: TourStepDef[] = [
     description:
       'Con <strong>Compartir</strong> invitás a otras personas a tu proyecto y editan el diagrama juntas en tiempo real.',
     side: 'bottom',
-    align: 'end',
+    align: 'center',
     interactive: true,
     advanceOnClick: true,
     done: (snap) => snap.isInviteModalOpen,

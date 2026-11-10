@@ -74,9 +74,9 @@ dialog::backdrop {
 .driver-popover.c2c-tour {
   z-index: 10001;
   box-sizing: border-box;
-  min-width: 260px;
-  max-width: min(340px, calc(100vw - 32px));
-  padding: 16px;
+  min-width: min(340px, calc(100vw - 32px));
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 20px 22px;
   border: 1px solid #e2e8f0;
   border-radius: 14px;
   background: #ffffff;
@@ -87,14 +87,14 @@ dialog::backdrop {
 
 .driver-popover.c2c-tour .driver-popover-title {
   padding-right: 24px;
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 700;
   color: #0f172a;
 }
 
 .driver-popover.c2c-tour .driver-popover-description {
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: 14px;
+  line-height: 1.6;
   color: #475569;
 }
 
@@ -121,13 +121,15 @@ dialog::backdrop {
 }
 
 .driver-popover.c2c-tour .driver-popover-footer-btn {
-  padding: 6px 12px;
+  min-width: 96px;
+  padding: 10px 20px;
   border: 1px solid #cbd5e1;
-  border-radius: 8px;
+  border-radius: 10px;
   background: #ffffff;
   color: #334155;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
 }
 
 .driver-popover.c2c-tour .driver-popover-footer-btn:hover,
